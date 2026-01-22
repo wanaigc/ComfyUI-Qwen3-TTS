@@ -1,0 +1,4 @@
+qwen-tts>=0.0.4
+soundfile
+# 强烈建议安装 flash-attn 以获得最佳性能，但它是可选的，取决于硬件
+# flash-attn>=2.0.0

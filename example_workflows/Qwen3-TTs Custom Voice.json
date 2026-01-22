@@ -1,0 +1,147 @@
+{
+  "id": "6bbd3374-8f9b-4fab-b971-196326e9241c",
+  "revision": 0,
+  "last_node_id": 36,
+  "last_link_id": 52,
+  "nodes": [
+    {
+      "id": 22,
+      "type": "Qwen3TTSLoader",
+      "pos": [
+        -836.9736265560047,
+        -1512.199106884452
+      ],
+      "size": [
+        325.40390625,
+        154
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSLoader"
+      },
+      "widgets_values": [
+        "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        "ModelScope",
+        "bf16",
+        "sdpa",
+        true
+      ]
+    },
+    {
+      "id": 26,
+      "type": "SaveAudio",
+      "pos": [
+        10.713456408611387,
+        -1509.3651103101167
+      ],
+      "size": [
+        270,
+        112
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 41
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "audio/qwen3-tts"
+      ]
+    },
+    {
+      "id": 27,
+      "type": "Qwen3TTSCustomVoice",
+      "pos": [
+        -464.16419797181095,
+        -1512.3117369307383
+      ],
+      "size": [
+        429.2156137101043,
+        439.114163815623
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "link": 39
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            41
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSCustomVoice"
+      },
+      "widgets_values": [
+        "其实我真的有发现，我是一个特别善于观察别人情绪的人。\n",
+        "Uncle_Fu (Chinese - Deep, Mellow, Mature Male)",
+        "Auto",
+        "",
+        1024,
+        0.7,
+        0.8,
+        50,
+        1.05
+      ]
+    }
+  ],
+  "links": [
+    [
+      39,
+      22,
+      0,
+      27,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      41,
+      27,
+      0,
+      26,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.180465191272431,
+      "offset": [
+        1050.283306311409,
+        1728.1977975796526
+      ]
+    },
+    "frontendVersion": "1.37.11",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}

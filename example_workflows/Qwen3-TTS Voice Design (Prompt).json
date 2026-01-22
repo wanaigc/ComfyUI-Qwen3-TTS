@@ -1,0 +1,146 @@
+{
+  "id": "3ca025f4-2a5a-439a-8d97-01bc53eae660",
+  "revision": 0,
+  "last_node_id": 36,
+  "last_link_id": 52,
+  "nodes": [
+    {
+      "id": 30,
+      "type": "Qwen3TTSLoader",
+      "pos": [
+        -968.9394239643284,
+        -912.7910610855955
+      ],
+      "size": [
+        409.789907914605,
+        182.50878434615026
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "links": [
+            43
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSLoader"
+      },
+      "widgets_values": [
+        "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+        "ModelScope",
+        "bf16",
+        "sdpa",
+        true
+      ]
+    },
+    {
+      "id": 31,
+      "type": "Qwen3TTSVoiceDesign",
+      "pos": [
+        -481.5584204234841,
+        -920.9792334858605
+      ],
+      "size": [
+        455.87721731845477,
+        390.91232639383327
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "link": 43
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            44
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSVoiceDesign"
+      },
+      "widgets_values": [
+        "It's in the top drawer... wait, it's empty? No way, that's impossible! I'm sure I put it there!",
+        "Speak in an incredulous tone, but with a hint of panic beginning to creep into your voice.",
+        "Chinese",
+        1024,
+        0.7,
+        0.8,
+        50,
+        1.05
+      ]
+    },
+    {
+      "id": 32,
+      "type": "SaveAudio",
+      "pos": [
+        26.091056204973214,
+        -915.1587369339898
+      ],
+      "size": [
+        373.77197501998717,
+        131.38597335538225
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 44
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "audio/ComfyUI"
+      ]
+    }
+  ],
+  "links": [
+    [
+      43,
+      30,
+      0,
+      31,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      44,
+      31,
+      0,
+      32,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.0368645264266423,
+      "offset": [
+        1210.4064998292097,
+        1196.2238758979292
+      ]
+    },
+    "frontendVersion": "1.37.11",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}
