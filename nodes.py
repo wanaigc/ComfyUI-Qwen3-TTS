@@ -9,7 +9,7 @@ from typing import Optional, List, Tuple
 
 from comfy.utils import ProgressBar
 
-# --- Dependency Check ---
+# --- 依赖检查 ---
 HAS_MODELSCOPE = False
 HAS_HUGGINGFACE = False
 
@@ -19,22 +19,29 @@ except ImportError:
     raise ImportError("Please install the core dependency: pip install qwen-tts")
 
 try:
-    from modelscope.hub.snapshot_download import snapshot_download as ms_snapshot_download
+    from modelscope.hub.snapshot_download import (
+        snapshot_download as ms_snapshot_download,
+    )
+
     HAS_MODELSCOPE = True
 except ImportError:
     pass
 
 try:
     from huggingface_hub import snapshot_download as hf_snapshot_download
+
     HAS_HUGGINGFACE = True
 except ImportError:
     pass
 
 logger = logging.getLogger("ComfyUI-Qwen3-TTS")
 
-# Register TTS model path
+# 注册模型路径
 if "TTS" not in folder_paths.folder_names_and_paths:
-    folder_paths.add_model_folder_path("TTS", os.path.join(folder_paths.models_dir, "TTS"))
+    folder_paths.add_model_folder_path(
+        "TTS", os.path.join(folder_paths.models_dir, "TTS")
+    )
+
 
 def safe_get_device(model):
     try:
@@ -44,16 +51,18 @@ def safe_get_device(model):
     except Exception:
         return torch.device("cpu")
 
+
 def clear_memory():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+
 class Qwen3TTSLoader:
     """
-    Responsible for loading the Qwen3-TTS model.
-    Precision and Attention Mode must be defined during loading.
+    负责加载 Qwen3-TTS 模型。
     """
+
     def __init__(self):
         self.model = None
 
@@ -61,17 +70,28 @@ class Qwen3TTSLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_repo": ([
-                    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-                    "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-                    "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-                    "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-                    "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
-                ],),
-                "download_source": (["ModelScope", "HuggingFace"], {"default": "ModelScope"}),
+                "model_repo": (
+                    [
+                        "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                        "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+                        "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+                        "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+                        "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+                    ],
+                ),
+                "download_source": (
+                    ["ModelScope", "HuggingFace"],
+                    {"default": "ModelScope"},
+                ),
                 "precision": (["bf16", "fp16", "fp32"], {"default": "bf16"}),
-                "attn_mode": (["flash_attention_2", "sdpa", "eager"], {"default": "flash_attention_2"}),
-                "auto_download": ("BOOLEAN", {"default": True, "label": "Auto Download if missing"}),
+                "attn_mode": (
+                    ["flash_attention_2", "sdpa", "eager"],
+                    {"default": "flash_attention_2"},
+                ),
+                "auto_download": (
+                    "BOOLEAN",
+                    {"default": True, "label": "Auto Download if missing"},
+                ),
             }
         }
 
@@ -80,9 +100,13 @@ class Qwen3TTSLoader:
     FUNCTION = "load_model"
     CATEGORY = "Qwen3-TTS"
 
-    def load_model(self, model_repo, download_source, precision, attn_mode, auto_download):
+    def load_model(
+        self, model_repo, download_source, precision, attn_mode, auto_download
+    ):
         clear_memory()
-        logger.info(f"Loader: Loading {model_repo} | Attn: {attn_mode} | Precision: {precision}")
+        logger.info(
+            f"Loader: Loading {model_repo} | Attn: {attn_mode} | Precision: {precision}"
+        )
 
         tts_path_root = folder_paths.get_folder_paths("TTS")[0]
         local_model_path = os.path.join(tts_path_root, model_repo)
@@ -91,19 +115,32 @@ class Qwen3TTSLoader:
             if auto_download:
                 logger.info(f"Loader: Downloading model to {local_model_path}")
                 if download_source == "ModelScope":
-                    if not HAS_MODELSCOPE: raise ImportError("Need modelscope installed.")
-                    ms_snapshot_download(model_id=model_repo, local_dir=local_model_path)
+                    if not HAS_MODELSCOPE:
+                        raise ImportError("Need modelscope installed.")
+                    ms_snapshot_download(
+                        model_id=model_repo, local_dir=local_model_path
+                    )
                 elif download_source == "HuggingFace":
-                    if not HAS_HUGGINGFACE: raise ImportError("Need huggingface_hub installed.")
-                    hf_snapshot_download(repo_id=model_repo, local_dir=local_model_path, local_dir_use_symlinks=False)
+                    if not HAS_HUGGINGFACE:
+                        raise ImportError("Need huggingface_hub installed.")
+                    hf_snapshot_download(
+                        repo_id=model_repo,
+                        local_dir=local_model_path,
+                        local_dir_use_symlinks=False,
+                    )
             else:
                 raise FileNotFoundError(f"Model not found at {local_model_path}")
 
-        dtype_map = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}
+        dtype_map = {
+            "bf16": torch.bfloat16,
+            "fp16": torch.float16,
+            "fp32": torch.float32,
+        }
         torch_dtype = dtype_map.get(precision, torch.bfloat16)
 
         try:
             from comfy.model_management import get_torch_device
+
             device = get_torch_device()
         except ImportError:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -111,7 +148,9 @@ class Qwen3TTSLoader:
         attn_impl = attn_mode
         if attn_impl == "flash_attention_2":
             if device.type == "cpu" or torch_dtype == torch.float32:
-                logger.warning("Loader: Flash Attention 2 req GPU+Half. Fallback to 'sdpa'.")
+                logger.warning(
+                    "Loader: Flash Attention 2 req GPU+Half. Fallback to 'sdpa'."
+                )
                 attn_impl = "sdpa"
 
         try:
@@ -119,7 +158,7 @@ class Qwen3TTSLoader:
                 local_model_path,
                 device_map=device,
                 dtype=torch_dtype,
-                attn_implementation=attn_impl
+                attn_implementation=attn_impl,
             )
             model.model_type_str = model_repo
 
@@ -133,7 +172,8 @@ class Qwen3TTSLoader:
 
 
 class Qwen3TTSBaseNode:
-    """ Base node containing shared helper methods """
+    """基类"""
+
     def _convert_audio_to_comfy(self, wavs: List[np.ndarray], sr: int):
         max_len = max([w.shape[0] if w.ndim == 1 else w.shape[1] for w in wavs])
         batch_size = len(wavs)
@@ -163,18 +203,56 @@ class Qwen3TTSBaseNode:
     @classmethod
     def get_generation_config(cls):
         return {
-            "max_new_tokens": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 64, "display": "number"}),
-            "temperature": ("FLOAT", {"default": 0.7, "min": 0.1, "max": 2.0, "step": 0.05, "display": "number"}),
-            "top_p": ("FLOAT", {"default": 0.8, "min": 0.1, "max": 1.0, "step": 0.05, "display": "number"}),
-            "top_k": ("INT", {"default": 50, "min": 0, "max": 200, "display": "number"}),
-            "repetition_penalty": ("FLOAT", {"default": 1.05, "min": 0.1, "max": 2.0, "step": 0.05, "display": "number"}),
+            "max_new_tokens": (
+                "INT",
+                {
+                    "default": 1024,
+                    "min": 64,
+                    "max": 4096,
+                    "step": 64,
+                    "display": "number",
+                },
+            ),
+            "temperature": (
+                "FLOAT",
+                {
+                    "default": 0.7,
+                    "min": 0.1,
+                    "max": 2.0,
+                    "step": 0.05,
+                    "display": "number",
+                },
+            ),
+            "top_p": (
+                "FLOAT",
+                {
+                    "default": 0.8,
+                    "min": 0.1,
+                    "max": 1.0,
+                    "step": 0.05,
+                    "display": "number",
+                },
+            ),
+            "top_k": (
+                "INT",
+                {"default": 50, "min": 0, "max": 200, "display": "number"},
+            ),
+            "repetition_penalty": (
+                "FLOAT",
+                {
+                    "default": 1.05,
+                    "min": 0.1,
+                    "max": 2.0,
+                    "step": 0.05,
+                    "display": "number",
+                },
+            ),
         }
 
+
 class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
-    """
-    CustomVoice Node
-    Supports batch generation, parameter broadcasting, and advanced generation parameters.
-    """
+    """CustomVoice 节点"""
+
     SPEAKER_MAPPING = {
         "Vivian (Chinese - Bright, Sharp, Young Female)": "Vivian",
         "Serena (Chinese - Warm, Soft, Young Female)": "Serena",
@@ -184,7 +262,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
         "Ryan (English - Rhythmic, Dynamic Male)": "Ryan",
         "Aiden (English - Sunny, Clear American Male)": "Aiden",
         "Ono_Anna (Japanese - Light, Playful Female)": "Ono_Anna",
-        "Sohee (Korean - Emotional, Warm Female)": "Sohee"
+        "Sohee (Korean - Emotional, Warm Female)": "Sohee",
     }
 
     @classmethod
@@ -232,26 +310,42 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
         inputs["optional"].update(cls.get_generation_config())
         return inputs
 
+    # 【修复】补回了漏掉的 RETURN_TYPES 等属性
     RETURN_TYPES = ("AUDIO",)
     FUNCTION = "generate"
     CATEGORY = "Qwen3-TTS"
 
-    def generate(self, model_obj, text, speaker, language, instruct="", max_new_tokens=1024, temperature=0.7, top_p=0.8, top_k=50, repetition_penalty=1.05):
+    def generate(
+        self,
+        model_obj,
+        text,
+        speaker,
+        language,
+        instruct="",
+        max_new_tokens=1024,
+        temperature=0.7,
+        top_p=0.8,
+        top_k=50,
+        repetition_penalty=1.05,
+    ):
         self._check_model_compatibility(model_obj, ["CustomVoice"])
         clear_memory()
 
         real_speaker_id = self.SPEAKER_MAPPING.get(speaker, "Vivian")
         dev = safe_get_device(model_obj)
 
-        text_list = [t.strip() for t in text.split('\n') if t.strip()]
+        text_list = [t.strip() for t in text.split("\n") if t.strip()]
         if not text_list:
             raise ValueError("Input text cannot be empty.")
 
         batch_size = len(text_list)
         logger.info(f"Generate: Custom Voice Batch Size: {batch_size} | Device: {dev}")
 
-        # Parameter Broadcasting
-        lang_input = None if language == "Auto" else language
+        if language == "Auto":
+            lang_input = "auto"
+        else:
+            lang_input = language
+
         language_list = [lang_input] * batch_size
         speaker_list = [real_speaker_id] * batch_size
         instruct_val = instruct if instruct.strip() else None
@@ -262,7 +356,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
             "temperature": temperature,
             "top_p": top_p,
             "top_k": top_k,
-            "repetition_penalty": repetition_penalty
+            "repetition_penalty": repetition_penalty,
         }
 
         wavs, sr = model_obj.generate_custom_voice(
@@ -270,7 +364,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
             language=language_list,
             speaker=speaker_list,
             instruct=instruct_list,
-            **gen_kwargs
+            **gen_kwargs,
         )
 
         logger.info("Batch Generation complete!")
@@ -278,10 +372,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
 
 
 class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
-    """
-    VoiceDesign Node
-    Supports batch generation and instruction broadcasting.
-    """
+    """VoiceDesign 节点"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -346,22 +437,27 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
         dev = safe_get_device(model_obj)
 
         text_list = [t.strip() for t in text.split("\n") if t.strip()]
-        if not text_list: raise ValueError("Input text cannot be empty.")
+        if not text_list:
+            raise ValueError("Input text cannot be empty.")
 
         instruct_list = [i.strip() for i in voice_instruction.split("\n") if i.strip()]
-        if not instruct_list: raise ValueError("Voice instruction cannot be empty.")
+        if not instruct_list:
+            raise ValueError("Voice instruction cannot be empty.")
 
         batch_size = len(text_list)
         logger.info(f"Generate: Voice Design Batch Size: {batch_size} | Device: {dev}")
 
-        # Instruction Broadcasting
         final_instructs = []
         if len(instruct_list) == 1:
             final_instructs = instruct_list * batch_size
+            logger.info("Broadcasting single instruction.")
         elif len(instruct_list) == batch_size:
             final_instructs = instruct_list
+            logger.info("Mapping instructions 1:1.")
         else:
-            raise ValueError(f"Instruct count {len(instruct_list)} != Text count {batch_size}")
+            raise ValueError(
+                f"Instruct count {len(instruct_list)} != Text count {batch_size}"
+            )
 
         language_list = [language] * batch_size
 
@@ -385,21 +481,29 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
 
 
 class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
-    """
-    Pre-Compute Prompt Node
-    Supports x_vector_only_mode for cloning without reference text.
-    """
+    """Pre-Compute Prompt 节点"""
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "model_obj": ("QWEN3_MODEL",),
                 "ref_audio": ("AUDIO",),
-                "x_vector_only": ("BOOLEAN", {"default": False, "label": "X-Vector Only (Ignore Text)"}),
+                "x_vector_only": (
+                    "BOOLEAN",
+                    {"default": False, "label": "X-Vector Only (Ignore Text)"},
+                ),
             },
             "optional": {
-                "ref_text": ("STRING", {"multiline": True, "default": "参考音频里的具体内容文本。", "placeholder": "If X-Vector Only is enabled, this can be empty."}),
-            }
+                "ref_text": (
+                    "STRING",
+                    {
+                        "multiline": True,
+                        "default": "参考音频里的具体内容文本。",
+                        "placeholder": "If X-Vector Only is enabled, this can be empty.",
+                    },
+                ),
+            },
         }
 
     RETURN_TYPES = ("QWEN3_PROMPT",)
@@ -412,7 +516,9 @@ class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
         clear_memory()
 
         if not x_vector_only and not ref_text.strip():
-            raise ValueError("When 'X-Vector Only' is disabled, Reference Text (ref_text) is required.")
+            raise ValueError(
+                "When 'X-Vector Only' is disabled, Reference Text (ref_text) is required."
+            )
 
         dev = safe_get_device(model_obj)
         logger.info(f"Prompt: Computing on {dev} | X-Vector Only: {x_vector_only}")
@@ -423,15 +529,17 @@ class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
         waveform = ref_audio["waveform"]
         sample_rate = ref_audio["sample_rate"]
         audio_tensor = waveform[0]
-        if audio_tensor.shape[0] > 1: audio_tensor = torch.mean(audio_tensor, dim=0)
-        else: audio_tensor = audio_tensor.squeeze(0)
+        if audio_tensor.shape[0] > 1:
+            audio_tensor = torch.mean(audio_tensor, dim=0)
+        else:
+            audio_tensor = audio_tensor.squeeze(0)
         ref_audio_numpy = audio_tensor.cpu().numpy()
 
         try:
             prompt = model_obj.create_voice_clone_prompt(
                 ref_audio=(ref_audio_numpy, sample_rate),
                 ref_text=ref_text if not x_vector_only else None,
-                x_vector_only_mode=x_vector_only
+                x_vector_only_mode=x_vector_only,
             )
             pbar.update(2)
             return (prompt,)
@@ -441,24 +549,52 @@ class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
 
 
 class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
-    """
-    Clone Node
-    Supports advanced generation parameters and instant x_vector mode.
-    """
+    """Clone 节点"""
+
     @classmethod
     def INPUT_TYPES(cls):
         inputs = {
             "required": {
                 "model_obj": ("QWEN3_MODEL",),
-                "target_text": ("STRING", {"multiline": True, "default": "我想用这个声音说这句话。"}),
-                "target_language": (["Chinese", "English", "Japanese", "Korean", "German", "French", "Russian", "Portuguese", "Spanish", "Italian"], {"default": "Chinese"}),
+                "target_text": (
+                    "STRING",
+                    {"multiline": True, "default": "我想用这个声音说这句话。"},
+                ),
+                "target_language": (
+                    [
+                        "Chinese",
+                        "English",
+                        "Japanese",
+                        "Korean",
+                        "German",
+                        "French",
+                        "Russian",
+                        "Portuguese",
+                        "Spanish",
+                        "Italian",
+                    ],
+                    {"default": "Chinese"},
+                ),
             },
             "optional": {
                 "ref_audio": ("AUDIO",),
-                "ref_text": ("STRING", {"multiline": True, "default": "", "placeholder": "Required if using ref_audio (unless X-Vector Only)"}),
+                "ref_text": (
+                    "STRING",
+                    {
+                        "multiline": True,
+                        "default": "",
+                        "placeholder": "Required if using ref_audio (unless X-Vector Only)",
+                    },
+                ),
                 "voice_clone_prompt": ("QWEN3_PROMPT",),
-                "enable_x_vector_instant": ("BOOLEAN", {"default": False, "label": "Instant X-Vector Mode (Ignore Ref Text)"}),
-            }
+                "enable_x_vector_instant": (
+                    "BOOLEAN",
+                    {
+                        "default": False,
+                        "label": "Instant X-Vector Mode (Ignore Ref Text)",
+                    },
+                ),
+            },
         }
         inputs["optional"].update(cls.get_generation_config())
         return inputs
@@ -467,21 +603,38 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
     FUNCTION = "generate"
     CATEGORY = "Qwen3-TTS"
 
-    def generate(self, model_obj, target_text, target_language, ref_audio=None, ref_text="", voice_clone_prompt=None, enable_x_vector_instant=False,
-                 max_new_tokens=1024, temperature=0.7, top_p=0.8, top_k=50, repetition_penalty=1.05):
+    def generate(
+        self,
+        model_obj,
+        target_text,
+        target_language,
+        ref_audio=None,
+        ref_text="",
+        voice_clone_prompt=None,
+        enable_x_vector_instant=False,
+        max_new_tokens=1024,
+        temperature=0.7,
+        top_p=0.8,
+        top_k=50,
+        repetition_penalty=1.05,
+    ):
 
         self._check_model_compatibility(model_obj, ["Base"])
         clear_memory()
 
         dev = safe_get_device(model_obj)
 
-        text_list = [t.strip() for t in target_text.split('\n') if t.strip()]
+        text_list = [t.strip() for t in target_text.split("\n") if t.strip()]
         if not text_list:
-             if target_text.strip(): text_list = [target_text.strip()]
-             else: raise ValueError("Target text cannot be empty.")
+            if target_text.strip():
+                text_list = [target_text.strip()]
+            else:
+                raise ValueError("Target text cannot be empty.")
 
         batch_size = len(text_list)
-        logger.info(f"Generate: Clone Batch Size: {batch_size} on {dev} | Tokens: {max_new_tokens}")
+        logger.info(
+            f"Generate: Clone Batch Size: {batch_size} on {dev} | Tokens: {max_new_tokens}"
+        )
 
         if "cpu" in str(dev).lower() and max_new_tokens > 512:
             logger.warning("CPU Mode Detected: Reducing max_new_tokens to 512.")
@@ -496,20 +649,26 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
             prompt_item = voice_clone_prompt
         elif ref_audio is not None:
             if not enable_x_vector_instant and not ref_text.strip():
-                raise ValueError("Reference Text (ref_text) is required unless X-Vector Only is enabled.")
+                raise ValueError(
+                    "Reference Text (ref_text) is required unless X-Vector Only is enabled."
+                )
 
-            logger.info(f"Clone: Processing ref_audio (Instant)... X-Vector: {enable_x_vector_instant}")
+            logger.info(
+                f"Clone: Processing ref_audio (Instant)... X-Vector: {enable_x_vector_instant}"
+            )
             waveform = ref_audio["waveform"]
             sample_rate = ref_audio["sample_rate"]
             audio_tensor = waveform[0]
-            if audio_tensor.shape[0] > 1: audio_tensor = torch.mean(audio_tensor, dim=0)
-            else: audio_tensor = audio_tensor.squeeze(0)
+            if audio_tensor.shape[0] > 1:
+                audio_tensor = torch.mean(audio_tensor, dim=0)
+            else:
+                audio_tensor = audio_tensor.squeeze(0)
             ref_audio_numpy = audio_tensor.cpu().numpy()
 
             prompt_item = model_obj.create_voice_clone_prompt(
                 ref_audio=(ref_audio_numpy, sample_rate),
                 ref_text=ref_text if not enable_x_vector_instant else None,
-                x_vector_only_mode=enable_x_vector_instant
+                x_vector_only_mode=enable_x_vector_instant,
             )
         else:
             raise ValueError("Input missing: need ref_audio OR voice_clone_prompt.")
@@ -523,7 +682,7 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
             "temperature": temperature,
             "top_p": top_p,
             "top_k": top_k,
-            "repetition_penalty": repetition_penalty
+            "repetition_penalty": repetition_penalty,
         }
 
         try:
@@ -531,7 +690,7 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
                 text=text_list,
                 language=language_list,
                 voice_clone_prompt=prompt_item,
-                **gen_kwargs
+                **gen_kwargs,
             )
 
             pbar.update(100)
@@ -541,3 +700,52 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Error: {e}")
+
+
+class Qwen3TTSAudioSpeed:
+    """
+    【新增节点】Audio Speed Control
+    Simple resampling-based speed adjustment (Pitch Shift).
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "audio": ("AUDIO",),
+                "speed": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.5,
+                        "max": 2.0,
+                        "step": 0.1,
+                        "display": "slider",
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("AUDIO",)
+    FUNCTION = "adjust_speed"
+    CATEGORY = "Qwen3-TTS"
+
+    def adjust_speed(self, audio, speed):
+        if speed == 1.0:
+            return (audio,)
+
+        logger.info(f"Adjusting Audio Speed: x{speed}")
+
+        waveform = audio["waveform"]  # [batch, channels, samples]
+        original_sr = audio["sample_rate"]
+
+        batch, channels, samples = waveform.shape
+        # Calculate new length: faster speed (speed > 1) means fewer samples
+        new_samples = int(samples / speed)
+
+        # Use linear interpolation for resampling
+        new_waveform = torch.nn.functional.interpolate(
+            waveform, size=new_samples, mode="linear", align_corners=False
+        )
+
+        return ({"waveform": new_waveform, "sample_rate": original_sr},)

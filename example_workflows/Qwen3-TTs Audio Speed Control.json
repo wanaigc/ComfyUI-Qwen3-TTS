@@ -1,0 +1,192 @@
+{
+  "id": "6bbd3374-8f9b-4fab-b971-196326e9241c",
+  "revision": 0,
+  "last_node_id": 37,
+  "last_link_id": 54,
+  "nodes": [
+    {
+      "id": 22,
+      "type": "Qwen3TTSLoader",
+      "pos": [
+        -836.9736265560047,
+        -1481.815284967428
+      ],
+      "size": [
+        325.40390625,
+        154
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSLoader"
+      },
+      "widgets_values": [
+        "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        "ModelScope",
+        "bf16",
+        "sdpa",
+        true
+      ]
+    },
+    {
+      "id": 26,
+      "type": "SaveAudio",
+      "pos": [
+        2.242219752136234,
+        -1361.1184688218004
+      ],
+      "size": [
+        284.40110231600784,
+        112
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 54
+        }
+      ],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "audio/qwen3-tts"
+      ]
+    },
+    {
+      "id": 27,
+      "type": "Qwen3TTSCustomVoice",
+      "pos": [
+        -470.9411872969911,
+        -1481.815284967428
+      ],
+      "size": [
+        429.2156137101043,
+        439.114163815623
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "link": 39
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            53
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSCustomVoice"
+      },
+      "widgets_values": [
+        "其实我真的有发现，我是一个特别善于观察别人情绪的人。\n",
+        "Dylan (Chinese Beijing - Clear, Natural Young Male)",
+        "Auto",
+        "",
+        1024,
+        0.7,
+        0.8,
+        50,
+        1.05
+      ]
+    },
+    {
+      "id": 37,
+      "type": "Qwen3TTSAudioSpeed",
+      "pos": [
+        1.8442864228080578,
+        -1481.815284967428
+      ],
+      "size": [
+        287.7447265625,
+        58
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 53
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            54
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSAudioSpeed"
+      },
+      "widgets_values": [
+        1.2
+      ]
+    }
+  ],
+  "links": [
+    [
+      39,
+      22,
+      0,
+      27,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      53,
+      27,
+      0,
+      37,
+      0,
+      "AUDIO"
+    ],
+    [
+      54,
+      37,
+      0,
+      26,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.180465191272431,
+      "offset": [
+        1037.5764513266959,
+        1737.5161579017754
+      ]
+    },
+    "frontendVersion": "1.37.11",
+    "workflowRendererVersion": "LG"
+  },
+  "version": 0.4
+}
