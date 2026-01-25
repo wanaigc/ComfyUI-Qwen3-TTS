@@ -45,7 +45,7 @@
 ```bash
 cd ComfyUI/custom_nodes
 git clone https://github.com/wanaigc/ComfyUI-Qwen3-TTS.git
-cd ComfyUI-Qwen3-TTS
+
 
 ```
 
@@ -54,6 +54,7 @@ cd ComfyUI-Qwen3-TTS
 请确保您的环境已安装必要的 Python 库：
 
 ```bash
+cd ComfyUI-Qwen3-TTS
 pip install -r requirements.txt
 
 ```
