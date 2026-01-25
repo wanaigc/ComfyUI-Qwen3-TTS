@@ -16,11 +16,20 @@ from comfy.utils import ProgressBar
 # --- 依赖检查 ---
 HAS_MODELSCOPE = False
 HAS_HUGGINGFACE = False
-
 HAS_FUNASR = False
+HAS_LIBROSA = False
+
 try:
     from funasr import AutoModel
+
     HAS_FUNASR = True
+except ImportError:
+    pass
+
+try:
+    import librosa
+
+    HAS_LIBROSA = True
 except ImportError:
     pass
 
@@ -205,23 +214,17 @@ class Qwen3TTSBaseNode:
         self, wavs: List[np.ndarray], sr: int, concat: bool = False
     ):
         if concat:
-            # --- 合并模式：将列表拼接成一个长数组 ---
-            # 确保只处理有效的数组，并统一维度
             valid_wavs = []
             for w in wavs:
                 if w.size > 0:
-                    # 确保是 1D 数组 (Samples,)
                     if w.ndim > 1:
                         w = w.squeeze()
                     valid_wavs.append(w)
 
             if not valid_wavs:
-                # 如果没有有效音频，返回静音
                 return ({"waveform": torch.zeros(1, 1, 1), "sample_rate": sr},)
 
-            # 拼接
             full_wav = np.concatenate(valid_wavs)
-            # 变成 Batch=1 的列表，交给下面原有逻辑处理
             wavs = [full_wav]
 
         max_len = max([w.shape[0] if w.ndim == 1 else w.shape[1] for w in wavs])
@@ -770,7 +773,6 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
             logger.error(f"Generation failed: {e}")
             raise RuntimeError(f"Error: {e}")
 
-
 class Qwen3TTSAudioSpeed:
     @classmethod
     def INPUT_TYPES(cls):
@@ -787,6 +789,19 @@ class Qwen3TTSAudioSpeed:
                         "display": "slider",
                     },
                 ),
+                "method": (
+                    ["Time Stretch (Librosa)", "Resampling (Pitch Shift)"],
+                    {"default": "Time Stretch (Librosa)"},
+                ),
+                # 【新增】优化参数：控制相位声码器的精度
+                "n_fft": (
+                    [2048, 4096, 8192],
+                    {"default": 4096, "label": "Quality (n_fft)"}
+                ),
+                "channel_mode": (
+                    ["Keep Original", "Force Mono", "Force Stereo"],
+                    {"default": "Keep Original"},
+                ),
             }
         }
 
@@ -794,24 +809,92 @@ class Qwen3TTSAudioSpeed:
     FUNCTION = "adjust_speed"
     CATEGORY = "Qwen3-TTS"
 
-    def adjust_speed(self, audio, speed):
-        if speed == 1.0:
-            return (audio,)
-
-        logger.info(f"Adjusting Audio Speed: x{speed}")
-
-        waveform = audio["waveform"]
+    def adjust_speed(self, audio, speed, method, n_fft, channel_mode):
+        waveform = audio["waveform"] # [Batch, Channel, Samples]
         original_sr = audio["sample_rate"]
 
-        batch, channels, samples = waveform.shape
-        new_samples = int(samples / speed)
+        # 1. 维度修正
+        if waveform.dim() == 3 and waveform.shape[-1] < 10 and waveform.shape[-2] > 100:
+            waveform = waveform.permute(0, 2, 1)
 
-        new_waveform = torch.nn.functional.interpolate(
-            waveform, size=new_samples, mode="linear", align_corners=False
-        )
+        # 2. 通道处理
+        if channel_mode == "Force Mono":
+            if waveform.shape[1] > 1:
+                waveform = torch.mean(waveform, dim=1, keepdim=True)
+        elif channel_mode == "Force Stereo":
+            if waveform.shape[1] == 1:
+                waveform = waveform.repeat(1, 2, 1)
+
+        # 3. 速度为1直接返回
+        if speed == 1.0:
+            return ({"waveform": waveform, "sample_rate": original_sr},)
+
+        # --- 4. 核心处理 ---
+        batch_size, channels, samples = waveform.shape
+        new_waveform = None
+
+        # 模式 A: 重采样 (变速又变调) -> 音质最干净
+        if method == "Resampling (Pitch Shift)":
+            new_samples = int(samples / speed)
+            # 伪装成 4D 处理 bicubic
+            waveform_4d = waveform.unsqueeze(2)
+            new_waveform_4d = torch.nn.functional.interpolate(
+                waveform_4d,
+                size=(1, new_samples),
+                mode="bicubic",
+                align_corners=False
+            )
+            new_waveform = new_waveform_4d.squeeze(2)
+
+        # 模式 B: 时间伸缩 (变速不变调) -> 优化版
+        else:
+            if not HAS_LIBROSA:
+                logger.warning("Librosa not installed. Fallback to Resampling.")
+                # 降级逻辑...
+                new_samples = int(samples / speed)
+                waveform_4d = waveform.unsqueeze(2)
+                new_waveform_4d = torch.nn.functional.interpolate(
+                    waveform_4d, size=(1, new_samples), mode="bicubic", align_corners=False
+                )
+                new_waveform = new_waveform_4d.squeeze(2)
+            else:
+                logger.info(f"Speed: x{speed} | Method: Time Stretch | n_fft: {n_fft}")
+
+                # 根据文档建议计算 hop_length
+                hop_len = n_fft // 4
+
+                processed_tensors = []
+
+                for i in range(batch_size):
+                    wav_np = waveform[i].cpu().numpy() # [C, S]
+
+                    is_dual_mono = False
+                    # 智能检测双单声道
+                    if channels == 2 and np.allclose(wav_np[0], wav_np[1], atol=1e-4):
+                        is_dual_mono = True
+                        y_in = wav_np[0]
+                        # 🔥 传入 n_fft 参数提升音质
+                        y_out = librosa.effects.time_stretch(y_in, rate=speed, n_fft=n_fft, hop_length=hop_len)
+                        y_stretched = np.stack([y_out, y_out])
+                    else:
+                        # 🔥 传入 n_fft 参数提升音质
+                        # librosa.effects.time_stretch 会把 kwargs 传给 stft
+                        y_stretched = librosa.effects.time_stretch(wav_np, rate=speed, n_fft=n_fft, hop_length=hop_len)
+
+                    processed_tensors.append(torch.from_numpy(y_stretched))
+
+                max_len = max(t.shape[1] for t in processed_tensors)
+                new_waveform = torch.zeros((batch_size, channels, max_len), dtype=torch.float32)
+                for i, t in enumerate(processed_tensors):
+                    new_waveform[i, :, :t.shape[1]] = t
+
+        # 5. 安全限制
+        if new_waveform is not None:
+            max_val = torch.max(torch.abs(new_waveform))
+            if max_val > 1.0:
+                new_waveform = new_waveform / max_val
 
         return ({"waveform": new_waveform, "sample_rate": original_sr},)
-
 
 class Qwen3TTSPromptManager:
     @classmethod
@@ -1075,7 +1158,6 @@ class Qwen3TTSSenseVoiceASR:
                 "audio": ("AUDIO",),
                 "model_id": (["iic/SenseVoiceSmall"],),
                 "language": (["auto", "zn", "en", "ja", "ko", "yue"], {"default": "auto"}),
-                "precision": (["float16", "float32", "int8"], {"default": "float16"}),
             }
         }
 
@@ -1084,7 +1166,7 @@ class Qwen3TTSSenseVoiceASR:
     FUNCTION = "recognize"
     CATEGORY = "Qwen3-TTS"
 
-    def recognize(self, audio, model_id, language, precision):
+    def recognize(self, audio, model_id, language):
         if not HAS_FUNASR:
             raise ImportError("Please install funasr: pip install funasr torchaudio")
 
@@ -1134,6 +1216,7 @@ class Qwen3TTSSenseVoiceASR:
 
             text_result = ""
             emotion_tag = ""
+            instruct = ""
 
             if res and isinstance(res, list):
                 raw_text = res[0].get("text", "")
@@ -1141,7 +1224,6 @@ class Qwen3TTSSenseVoiceASR:
                 clean_text = re.sub(r"<\|.*?\|>", "", raw_text).strip()
                 text_result = clean_text
 
-                # 提取情感用于 Instruct
                 if "<|HAPPY|>" in raw_text:
                     emotion_tag = "happy"
                 elif "<|ANGRY|>" in raw_text:
@@ -1149,7 +1231,6 @@ class Qwen3TTSSenseVoiceASR:
                 elif "<|SAD|>" in raw_text:
                     emotion_tag = "sad"
 
-                instruct = ""
                 if emotion_tag in EMOTION_MAP:
                     instruct = EMOTION_MAP[emotion_tag]
                 elif emotion_tag:
@@ -1161,5 +1242,6 @@ class Qwen3TTSSenseVoiceASR:
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            del model
+            if 'model' in locals():
+                del model
             clear_memory()

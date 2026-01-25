@@ -1,5 +1,5 @@
 qwen-tts>=0.0.4
-transforms>=4.57.3
+transformers>=4.57.3
 soundfile
 modelscope
 huggingface-hub
