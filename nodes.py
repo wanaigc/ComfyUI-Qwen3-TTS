@@ -10,6 +10,7 @@ from typing import Optional, List, Tuple, Dict, Any
 import torch.nn.functional as F
 import tempfile
 import soundfile as sf
+import types
 
 from comfy.utils import ProgressBar
 
@@ -54,6 +55,13 @@ try:
 except ImportError:
     pass
 
+HAS_FFMPEG_PYTHON = False
+try:
+    import ffmpeg
+    HAS_FFMPEG_PYTHON = True
+except ImportError:
+    pass
+
 logger = logging.getLogger("ComfyUI-Qwen3-TTS")
 
 EMOTION_MAP = {
@@ -85,11 +93,78 @@ def safe_get_device(model):
     except Exception:
         return torch.device("cpu")
 
-
 def clear_memory():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    elif torch.backends.mps.is_available():
+        try:
+            torch.mps.empty_cache()
+        except:
+            pass
+
+def apply_qwen3_patches(model, attn_mode="sdpa"):
+    if model is None:
+        return
+
+    def _safe_normalize(self, audios):
+        if isinstance(audios, list):
+            items = audios
+        elif (
+            isinstance(audios, tuple)
+            and len(audios) == 2
+            and isinstance(audios[0], np.ndarray)
+        ):
+            items = [audios]
+        else:
+            items = [audios]
+
+        out = []
+        for a in items:
+            if a is None:
+                continue
+            if isinstance(a, str):
+                wav, sr = self._load_audio_to_np(a)
+                out.append([wav.astype(np.float32), int(sr)])
+            elif (
+                isinstance(a, (tuple, list))
+                and len(a) == 2
+                and isinstance(a[0], np.ndarray)
+            ):
+                out.append([a[0].astype(np.float32), int(a[1])])
+
+        for i in range(len(out)):
+            wav, sr = out[i][0], out[i][1]
+            if wav.ndim > 1:
+                out[i][0] = np.mean(wav, axis=-1).astype(np.float32)
+        return out
+
+    model._normalize_audio_inputs = types.MethodType(_safe_normalize, model)
+
+    if attn_mode == "sage_attention":
+        try:
+            from sageattention import sageattn
+            def make_sage_forward(orig_forward):
+                def sage_forward(*args, **kwargs):
+                    if len(args) >= 3:
+                        q, k, v = args[0], args[1], args[2]
+                        return sageattn(q, k, v, is_causal=False, attn_mask=kwargs.get('attention_mask'))
+                    return orig_forward(*args, **kwargs)
+                return sage_forward
+
+            patched_count = 0
+            for name, m in model.model.named_modules():
+                if 'Attention' in type(m).__name__ or 'attn' in name.lower():
+                    if hasattr(m, 'forward'):
+                        m.forward = make_sage_forward(m.forward)
+                        patched_count += 1
+            logger.info(f"Qwen3-TTS: SageAttention patched on {patched_count} modules.")
+        except ImportError:
+            logger.warning("Qwen3-TTS: 'sageattention' not installed. Running in SDPA mode.")
+        except Exception as e:
+            logger.warning(f"Qwen3-TTS: SageAttention patch failed: {e}")
+
+    logger.info("Qwen3-TTS: Industrial stability patches applied.")
 
 
 def set_random_seed(seed):
@@ -123,8 +198,8 @@ class Qwen3TTSLoader:
                 ),
                 "precision": (["bf16", "fp16", "fp32"], {"default": "bf16"}),
                 "attn_mode": (
-                    ["flash_attention_2", "sdpa", "eager"],
-                    {"default": "flash_attention_2"},
+                    ["flash_attention_2", "sage_attention", "sdpa", "eager"],
+                    {"default": "sdpa"},
                 ),
                 "auto_download": (
                     "BOOLEAN",
@@ -174,14 +249,18 @@ class Qwen3TTSLoader:
             "fp16": torch.float16,
             "fp32": torch.float32,
         }
-        torch_dtype = dtype_map.get(precision, torch.bfloat16)
 
         try:
             from comfy.model_management import get_torch_device
-
             device = get_torch_device()
         except ImportError:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+
+        if device.type == "mps" and precision == "fp32":
+            logger.warning("MPS device detected: 'fp32' is extremely slow. Forcing 'fp16'.")
+            torch_dtype = torch.float16
+        else:
+            torch_dtype = dtype_map.get(precision, torch.bfloat16)
 
         attn_impl = attn_mode
         if attn_impl == "flash_attention_2":
@@ -190,6 +269,8 @@ class Qwen3TTSLoader:
                     "Loader: Flash Attention 2 req GPU+Half. Fallback to 'sdpa'."
                 )
                 attn_impl = "sdpa"
+        elif attn_impl == "sage_attention":
+            attn_impl = "sdpa"
 
         try:
             model = Qwen3TTSModel.from_pretrained(
@@ -198,8 +279,8 @@ class Qwen3TTSLoader:
                 dtype=torch_dtype,
                 attn_implementation=attn_impl,
             )
+            apply_qwen3_patches(model)
             model.model_type_str = model_repo
-
             dev = safe_get_device(model)
             logger.info(f"Loader: Success. Device: {dev} | Dtype: {torch_dtype}")
 
@@ -244,6 +325,21 @@ class Qwen3TTSBaseNode:
                 batch_waveform[i, 0, :length] = tensor_w
 
         return ({"waveform": batch_waveform, "sample_rate": sr},)
+
+    def _audio_tensor_to_numpy_tuple(self, audio_data: Dict[str, Any]) -> Tuple[np.ndarray, int]:
+        waveform = audio_data["waveform"]
+        sr = audio_data["sample_rate"]
+
+        if waveform.dim() > 1:
+            waveform = waveform[0]
+            if waveform.dim() > 1:
+                waveform = torch.mean(waveform, dim=0)
+
+        wav_np = waveform.cpu().numpy().astype(np.float32)
+        if wav_np.size < 1024:
+            wav_np = np.pad(wav_np, (0, 1024 - wav_np.size))
+
+        return (wav_np, int(sr))
 
     def _check_model_compatibility(self, model, required_keywords):
         name = getattr(model, "model_type_str", "")
@@ -591,18 +687,11 @@ class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
         pbar = ProgressBar(2)
         pbar.update(1)
 
-        waveform = ref_audio["waveform"]
-        sample_rate = ref_audio["sample_rate"]
-        audio_tensor = waveform[0]
-        if audio_tensor.shape[0] > 1:
-            audio_tensor = torch.mean(audio_tensor, dim=0)
-        else:
-            audio_tensor = audio_tensor.squeeze(0)
-        ref_audio_numpy = audio_tensor.cpu().numpy()
+        wav_np, sr = self._audio_tensor_to_numpy_tuple(ref_audio)
 
         try:
             prompt = model_obj.create_voice_clone_prompt(
-                ref_audio=(ref_audio_numpy, sample_rate),
+                ref_audio=(wav_np, sr),
                 ref_text=ref_text if not x_vector_only else None,
                 x_vector_only_mode=x_vector_only,
             )
@@ -720,24 +809,10 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
             prompt_item = voice_clone_prompt
         elif ref_audio is not None:
             if not enable_x_vector_instant and not ref_text.strip():
-                raise ValueError(
-                    "Reference Text (ref_text) is required unless X-Vector Only is enabled."
-                )
-
-            logger.info(
-                f"Clone: Processing ref_audio (Instant)... X-Vector: {enable_x_vector_instant}"
-            )
-            waveform = ref_audio["waveform"]
-            sample_rate = ref_audio["sample_rate"]
-            audio_tensor = waveform[0]
-            if audio_tensor.shape[0] > 1:
-                audio_tensor = torch.mean(audio_tensor, dim=0)
-            else:
-                audio_tensor = audio_tensor.squeeze(0)
-            ref_audio_numpy = audio_tensor.cpu().numpy()
-
+                raise ValueError("Reference Text (ref_text) is required unless X-Vector Only is enabled.")
+            ref_wav, ref_sr = self._audio_tensor_to_numpy_tuple(ref_audio) #
             prompt_item = model_obj.create_voice_clone_prompt(
-                ref_audio=(ref_audio_numpy, sample_rate),
+                ref_audio=(ref_wav, ref_sr),
                 ref_text=ref_text if not enable_x_vector_instant else None,
                 x_vector_only_mode=enable_x_vector_instant,
             )
@@ -783,24 +858,27 @@ class Qwen3TTSAudioSpeed:
                     "FLOAT",
                     {
                         "default": 1.0,
-                        "min": 0.5,
-                        "max": 2.0,
+                        "min": 0.1,
+                        "max": 10.0,
                         "step": 0.1,
                         "display": "slider",
                     },
                 ),
                 "method": (
-                    ["Time Stretch (Librosa)", "Resampling (Pitch Shift)"],
-                    {"default": "Time Stretch (Librosa)"},
-                ),
-                # 【新增】优化参数：控制相位声码器的精度
-                "n_fft": (
-                    [2048, 4096, 8192],
-                    {"default": 4096, "label": "Quality (n_fft)"}
+                    [
+                        "FFmpeg (atempo) - Best for Speech",
+                        "Time Stretch (Librosa)",
+                        "Resampling (Pitch Shift)",
+                    ],
+                    {"default": "FFmpeg (atempo) - Best for Speech"},
                 ),
                 "channel_mode": (
                     ["Keep Original", "Force Mono", "Force Stereo"],
                     {"default": "Keep Original"},
+                ),
+                "n_fft": (
+                    [2048, 4096, 8192],
+                    {"default": 4096, "label": "Quality (Librosa only)"}
                 ),
             }
         }
@@ -810,14 +888,12 @@ class Qwen3TTSAudioSpeed:
     CATEGORY = "Qwen3-TTS"
 
     def adjust_speed(self, audio, speed, method, n_fft, channel_mode):
-        waveform = audio["waveform"] # [Batch, Channel, Samples]
+        waveform = audio["waveform"].clone()
         original_sr = audio["sample_rate"]
 
-        # 1. 维度修正
         if waveform.dim() == 3 and waveform.shape[-1] < 10 and waveform.shape[-2] > 100:
             waveform = waveform.permute(0, 2, 1)
 
-        # 2. 通道处理
         if channel_mode == "Force Mono":
             if waveform.shape[1] > 1:
                 waveform = torch.mean(waveform, dim=1, keepdim=True)
@@ -825,76 +901,81 @@ class Qwen3TTSAudioSpeed:
             if waveform.shape[1] == 1:
                 waveform = waveform.repeat(1, 2, 1)
 
-        # 3. 速度为1直接返回
         if speed == 1.0:
             return ({"waveform": waveform, "sample_rate": original_sr},)
 
-        # --- 4. 核心处理 ---
-        batch_size, channels, samples = waveform.shape
-        new_waveform = None
+        processed_input_audio = {"waveform": waveform, "sample_rate": original_sr}
+        wav_numpy, sr = Qwen3TTSBaseNode()._audio_tensor_to_numpy_tuple(processed_input_audio)
 
-        # 模式 A: 重采样 (变速又变调) -> 音质最干净
-        if method == "Resampling (Pitch Shift)":
-            new_samples = int(samples / speed)
-            # 伪装成 4D 处理 bicubic
-            waveform_4d = waveform.unsqueeze(2)
-            new_waveform_4d = torch.nn.functional.interpolate(
-                waveform_4d,
-                size=(1, new_samples),
-                mode="bicubic",
-                align_corners=False
-            )
-            new_waveform = new_waveform_4d.squeeze(2)
-
-        # 模式 B: 时间伸缩 (变速不变调) -> 优化版
-        else:
-            if not HAS_LIBROSA:
-                logger.warning("Librosa not installed. Fallback to Resampling.")
-                # 降级逻辑...
-                new_samples = int(samples / speed)
-                waveform_4d = waveform.unsqueeze(2)
-                new_waveform_4d = torch.nn.functional.interpolate(
-                    waveform_4d, size=(1, new_samples), mode="bicubic", align_corners=False
-                )
-                new_waveform = new_waveform_4d.squeeze(2)
+        if "FFmpeg" in method:
+            if not HAS_FFMPEG_PYTHON:
+                print("⚠️ 'ffmpeg-python' lib not found. Fallback to Librosa.")
+                method = "Time Stretch (Librosa)"
             else:
-                logger.info(f"Speed: x{speed} | Method: Time Stretch | n_fft: {n_fft}")
+                temp_in = ""
+                temp_out = ""
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_in, \
+                         tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_out:
+                        temp_in = f_in.name
+                        temp_out = f_out.name
 
-                # 根据文档建议计算 hop_length
-                hop_len = n_fft // 4
+                    sf.write(temp_in, wav_numpy, sr)
 
-                processed_tensors = []
+                    stream = ffmpeg.input(temp_in)
+                    curr_speed = speed
 
-                for i in range(batch_size):
-                    wav_np = waveform[i].cpu().numpy() # [C, S]
+                    while curr_speed > 2.0:
+                        stream = stream.filter('atempo', 2.0)
+                        curr_speed /= 2.0
+                    while curr_speed < 0.5:
+                        stream = stream.filter('atempo', 0.5)
+                        curr_speed /= 0.5
+                    if abs(curr_speed - 1.0) > 0.01:
+                        stream = stream.filter('atempo', curr_speed)
 
-                    is_dual_mono = False
-                    # 智能检测双单声道
-                    if channels == 2 and np.allclose(wav_np[0], wav_np[1], atol=1e-4):
-                        is_dual_mono = True
-                        y_in = wav_np[0]
-                        # 🔥 传入 n_fft 参数提升音质
-                        y_out = librosa.effects.time_stretch(y_in, rate=speed, n_fft=n_fft, hop_length=hop_len)
-                        y_stretched = np.stack([y_out, y_out])
+                    stream.output(temp_out).run(overwrite_output=True, quiet=True)
+
+                    new_wav, new_sr = sf.read(temp_out)
+
+                    if new_wav.ndim == 1:
+                        new_wav = new_wav[np.newaxis, :]
                     else:
-                        # 🔥 传入 n_fft 参数提升音质
-                        # librosa.effects.time_stretch 会把 kwargs 传给 stft
-                        y_stretched = librosa.effects.time_stretch(wav_np, rate=speed, n_fft=n_fft, hop_length=hop_len)
+                        new_wav = new_wav.T
 
-                    processed_tensors.append(torch.from_numpy(y_stretched))
+                    out_tensor = torch.from_numpy(new_wav).float().unsqueeze(0)
+                    return ({"waveform": out_tensor, "sample_rate": new_sr},)
 
-                max_len = max(t.shape[1] for t in processed_tensors)
-                new_waveform = torch.zeros((batch_size, channels, max_len), dtype=torch.float32)
-                for i, t in enumerate(processed_tensors):
-                    new_waveform[i, :, :t.shape[1]] = t
+                except Exception as e:
+                    error_str = str(e)
+                    if hasattr(e, 'stderr') and e.stderr:
+                        error_str += f" | Details: {e.stderr.decode()}"
+                    print(f"❌ FFmpeg error: {error_str}. Falling back to Librosa.")
+                finally:
+                    for p in [temp_in, temp_out]:
+                        if p and os.path.exists(p):
+                            try: os.remove(p)
+                            except: pass
 
-        # 5. 安全限制
-        if new_waveform is not None:
-            max_val = torch.max(torch.abs(new_waveform))
-            if max_val > 1.0:
-                new_waveform = new_waveform / max_val
+        if "Resampling" in method:
+            samples = wav_numpy.shape[-1]
+            new_samples = int(samples / speed)
+            wav_tensor = torch.from_numpy(wav_numpy).unsqueeze(0).unsqueeze(0)
+            new_wav = F.interpolate(wav_tensor, size=new_samples, mode='linear', align_corners=False)
+            return ({"waveform": new_wav.squeeze(0), "sample_rate": sr},)
 
-        return ({"waveform": new_waveform, "sample_rate": original_sr},)
+        if not HAS_LIBROSA:
+            print("⚠️ Librosa not found. Fallback to Resampling.")
+            return self.adjust_speed(processed_input_audio, speed, "Resampling (Pitch Shift)", n_fft, "Keep Original")
+
+        y_stretched = librosa.effects.time_stretch(wav_numpy, rate=speed, n_fft=n_fft)
+
+        out_tensor = torch.from_numpy(y_stretched).float()
+        if out_tensor.ndim == 1:
+            out_tensor = out_tensor.unsqueeze(0)
+        out_tensor = out_tensor.unsqueeze(0)
+
+        return ({"waveform": out_tensor, "sample_rate": sr},)
 
 class Qwen3TTSPromptManager:
     @classmethod
@@ -1150,14 +1231,17 @@ class Qwen3TTSAdvancedDialogue(Qwen3TTSBaseNode):
 
         return self._convert_audio_to_comfy([full_audio], sr)
 
-class Qwen3TTSSenseVoiceASR:
+class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "audio": ("AUDIO",),
                 "model_id": (["iic/SenseVoiceSmall"],),
-                "language": (["auto", "zn", "en", "ja", "ko", "yue"], {"default": "auto"}),
+                "language": (
+                    ["auto", "zn", "en", "ja", "ko", "yue"],
+                    {"default": "auto"},
+                ),
             }
         }
 
@@ -1169,42 +1253,40 @@ class Qwen3TTSSenseVoiceASR:
     def recognize(self, audio, model_id, language):
         if not HAS_FUNASR:
             raise ImportError("Please install funasr: pip install funasr torchaudio")
-
         if not HAS_MODELSCOPE:
-             raise ImportError("Need modelscope installed for SenseVoice.")
+            raise ImportError("Need modelscope installed for SenseVoice.")
 
         tts_path_root = folder_paths.get_folder_paths("TTS")[0]
         model_dir = os.path.join(tts_path_root, "SenseVoiceSmall")
-
         if not os.path.exists(model_dir) or not os.listdir(model_dir):
             logger.info(f"ASR: Downloading SenseVoiceSmall to {model_dir}")
             ms_snapshot_download(model_id=model_id, local_dir=model_dir)
 
-        logger.info("ASR: Loading SenseVoice model...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            from comfy.model_management import get_torch_device
+            device_obj = get_torch_device()
+        except ImportError:
+            device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        device_str = str(device_obj)
+
+        logger.info(f"ASR: Loading SenseVoice model on {device_str}...")
 
         model = AutoModel(
             model=model_dir,
             trust_remote_code=True,
-            device=device,
+            device=device_str,
             disable_update=True
         )
 
-        waveform = audio["waveform"]
-        sr = audio["sample_rate"]
-
-        if waveform.dim() == 3:
-            waveform = waveform[0]
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-            temp_path = tmp_file.name
-
-        wav_numpy = waveform.squeeze().cpu().numpy()
-        sf.write(temp_path, wav_numpy, sr)
+        wav_np, sr = self._audio_tensor_to_numpy_tuple(audio)
+        temp_path = ""
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            temp_path = tmp.name
 
         try:
+            sf.write(temp_path, wav_np, sr)
+
             logger.info(f"ASR: Transcribing audio ({language})...")
             res = model.generate(
                 input=temp_path,
@@ -1220,7 +1302,6 @@ class Qwen3TTSSenseVoiceASR:
 
             if res and isinstance(res, list):
                 raw_text = res[0].get("text", "")
-
                 clean_text = re.sub(r"<\|.*?\|>", "", raw_text).strip()
                 text_result = clean_text
 
@@ -1234,14 +1315,18 @@ class Qwen3TTSSenseVoiceASR:
                 if emotion_tag in EMOTION_MAP:
                     instruct = EMOTION_MAP[emotion_tag]
                 elif emotion_tag:
-                     instruct = f"Speak in a {emotion_tag} tone."
+                    instruct = f"Speak in a {emotion_tag} tone."
 
             logger.info(f"ASR Result: {text_result} | Emotion: {emotion_tag}")
             return (text_result, instruct)
 
+        except Exception as e:
+            logger.error(f"ASR Error: {e}")
+            return ("", "")
+
         finally:
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
-            if 'model' in locals():
+            if "model" in locals():
                 del model
             clear_memory()

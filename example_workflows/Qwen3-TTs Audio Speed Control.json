@@ -1,8 +1,8 @@
 {
   "id": "6bbd3374-8f9b-4fab-b971-196326e9241c",
   "revision": 0,
-  "last_node_id": 39,
-  "last_link_id": 58,
+  "last_node_id": 42,
+  "last_link_id": 60,
   "nodes": [
     {
       "id": 22,
@@ -29,7 +29,18 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "Qwen3TTSLoader"
+        "Node name for S&R": "Qwen3TTSLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {
+            "model_repo": true,
+            "download_source": true,
+            "precision": true,
+            "attn_mode": true,
+            "auto_download": true
+          },
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
       },
       "widgets_values": [
         "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
@@ -43,8 +54,8 @@
       "id": 26,
       "type": "SaveAudio",
       "pos": [
-        -142.9479270435486,
-        -1346.5615550790226
+        -132.21833014592008,
+        -1292.9896670227781
       ],
       "size": [
         284.40110231600784,
@@ -57,50 +68,23 @@
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": 54
+          "link": 60
         }
       ],
       "outputs": [],
-      "properties": {},
-      "widgets_values": [
-        "audio/qwen3-tts"
-      ]
-    },
-    {
-      "id": 37,
-      "type": "Qwen3TTSAudioSpeed",
-      "pos": [
-        -145.28157951698336,
-        -1464.4388131538744
-      ],
-      "size": [
-        287.7447265625,
-        58
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "audio",
-          "type": "AUDIO",
-          "link": 58
-        }
-      ],
-      "outputs": [
-        {
-          "name": "AUDIO",
-          "type": "AUDIO",
-          "links": [
-            54
-          ]
-        }
-      ],
       "properties": {
-        "Node name for S&R": "Qwen3TTSAudioSpeed"
+        "Node name for S&R": "SaveAudio",
+        "ue_properties": {
+          "widget_ue_connectable": {
+            "filename_prefix": true,
+            "audioUI": true
+          },
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
       },
       "widgets_values": [
-        1.2
+        "audio/qwen3-tts"
       ]
     },
     {
@@ -129,19 +113,36 @@
           "name": "AUDIO",
           "type": "AUDIO",
           "links": [
-            58
+            59
           ]
         }
       ],
       "properties": {
-        "Node name for S&R": "Qwen3TTSCustomVoice"
+        "Node name for S&R": "Qwen3TTSCustomVoice",
+        "ue_properties": {
+          "widget_ue_connectable": {
+            "text": true,
+            "speaker": true,
+            "language": true,
+            "output_mode": true,
+            "seed": true,
+            "instruct": true,
+            "max_new_tokens": true,
+            "temperature": true,
+            "top_p": true,
+            "top_k": true,
+            "repetition_penalty": true
+          },
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
       },
       "widgets_values": [
         "每行文本生成一段独立的音频（适合做素材）\n多行文本合并为一段长音频（适合做朗读）",
         "Vivian (Chinese - Bright, Sharp, Young Female)",
         "Auto",
         "Concatenate (Merge)",
-        333630253233028,
+        678796829724885,
         "randomize",
         "",
         1024,
@@ -150,17 +151,49 @@
         50,
         1.1
       ]
+    },
+    {
+      "id": 40,
+      "type": "Qwen3TTSAudioSpeed",
+      "pos": [
+        -136.62719773526763,
+        -1470.4127681644566
+      ],
+      "size": [
+        282.25868835449216,
+        130
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 59
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            60
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSAudioSpeed"
+      },
+      "widgets_values": [
+        1.2,
+        "FFmpeg (atempo) - Best for Speech",
+        "Keep Original",
+        4096
+      ]
     }
   ],
   "links": [
-    [
-      54,
-      37,
-      0,
-      26,
-      0,
-      "AUDIO"
-    ],
     [
       57,
       22,
@@ -170,10 +203,18 @@
       "QWEN3_MODEL"
     ],
     [
-      58,
+      59,
       39,
       0,
-      37,
+      40,
+      0,
+      "AUDIO"
+    ],
+    [
+      60,
+      40,
+      0,
+      26,
       0,
       "AUDIO"
     ]
@@ -182,14 +223,16 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.3141220620428404,
+      "scale": 1.1946564200389458,
       "offset": [
-        1125.956908842132,
-        1635.6942182470734
+        1031.4451404247243,
+        1684.700320389432
       ]
     },
     "frontendVersion": "1.37.11",
-    "workflowRendererVersion": "LG"
+    "workflowRendererVersion": "LG",
+    "ue_links": [],
+    "links_added_by_ue": []
   },
   "version": 0.4
 }

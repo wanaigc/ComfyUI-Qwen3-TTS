@@ -10,7 +10,7 @@
 
 ## 📋 更新日志
 
-* **2026-01-25**：**升级功能**：Qwen3TTS AudioSpeed节点新增 channel_mode 参数、Method选项 Time Stretch (Librosa)：变速不变调、Resampling (Pitch Shift)：变速变调，增加 FFT参数
+* **2026-01-25**：**升级功能**：Qwen3TTS AudioSpeed节点新增 channel_mode 参数、Method选项新增 FFmpeg (atempo)：人声变速首选（推荐）、Time Stretch (Librosa)：变速不变调、Resampling (Pitch Shift)：变速变调，并增加 FFT参数。
 * **2026-01-24**：**核心升级**：新增 `RoleBank`角色 与 `AdvancedDialogue` 多角色配音节点，新增 `ScriptProcessor`，支持 `[情感标签]` 与 `[pause:停顿]` 自动解析，并增加**Seed 随机种子**控制、**输出模式(合并/分段)**、**音频转文本**功能。
 * **2026-01-23**：🔥 **基础功能**：为所有生成节点添加完整采样控制（`top_p`, `top_k`, `temperature`, `repetition_penalty`）。
 
