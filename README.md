@@ -2,7 +2,7 @@
 
 基于阿里巴巴 Qwen 团队开源的 **Qwen3-TTS** 模型，为 ComfyUI 打造的工业级语音合成方案。
 
-本插件不仅完美复刻了 Qwen3-TTS 的核心能力，更在此基础上增加了 **智能脚本驱动**、**多角色广播剧引擎** 以及 **专业音频后处理** 功能，支持从简单的单句合成到复杂的剧情配音全流程覆盖。
+本插件基于Qwen3-TTS语音克隆和多角色配音。具备脚本驱动的无限多角色配音功能、情感感知的语音转语音（ASR）技术，支持变速不变调以及高效的配音资产管理能力。
 
 ![Workflow Preview](docs/image/workflow.png)
 
@@ -10,6 +10,7 @@
 
 ## 📋 更新日志
 
+* **2026-01-27**：**升级功能**：节点增强情绪， Voice Clone、 Custom Voice、Voice Design支持[pause:0.5]停顿，注：支持保存音色，无限角色配音。
 * **2026-01-25**：**升级功能**：Qwen3TTS AudioSpeed节点新增 channel_mode 参数、Method选项新增 FFmpeg (atempo)：人声变速首选（推荐）、Time Stretch (Librosa)：变速不变调、Resampling (Pitch Shift)：变速变调，并增加 FFT参数。
 * **2026-01-24**：**核心升级**：新增 `RoleBank`角色 与 `AdvancedDialogue` 多角色配音节点，新增 `ScriptProcessor`，支持 `[情感标签]` 与 `[pause:停顿]` 自动解析，并增加**Seed 随机种子**控制、**输出模式(合并/分段)**、**音频转文本**功能。
 * **2026-01-23**：🔥 **基础功能**：为所有生成节点添加完整采样控制（`top_p`, `top_k`, `temperature`, `repetition_penalty`）。

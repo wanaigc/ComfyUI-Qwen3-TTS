@@ -1,15 +1,15 @@
 {
   "id": "9c31c47d-f3d6-43ba-bbe2-63cda1c7abb1",
   "revision": 0,
-  "last_node_id": 38,
-  "last_link_id": 61,
+  "last_node_id": 40,
+  "last_link_id": 67,
   "nodes": [
     {
       "id": 6,
       "type": "LoadAudio",
       "pos": [
-        -882.7709944925305,
-        -137.3241575821094
+        -1008.2096456155926,
+        -97.1837892227298
       ],
       "size": [
         270,
@@ -25,7 +25,7 @@
           "type": "AUDIO",
           "links": [
             47,
-            59
+            66
           ]
         }
       ],
@@ -50,13 +50,13 @@
         112
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": 61
+          "link": 62
         }
       ],
       "outputs": [],
@@ -86,7 +86,7 @@
           "type": "QWEN3_MODEL",
           "links": [
             48,
-            60
+            64
           ]
         }
       ],
@@ -105,15 +105,15 @@
       "id": 35,
       "type": "Qwen3TTSVoiceClonePrompt",
       "pos": [
-        -571.4539360371443,
-        -370.6041931450887
+        -566.4363899922229,
+        -393.18315034724003
       ],
       "size": [
         400,
         200
       ],
       "flags": {},
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -125,6 +125,15 @@
           "name": "ref_audio",
           "type": "AUDIO",
           "link": 47
+        },
+        {
+          "name": "ref_text",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "ref_text"
+          },
+          "link": 67
         }
       ],
       "outputs": [
@@ -132,7 +141,7 @@
           "name": "voice_clone_prompt",
           "type": "QWEN3_PROMPT",
           "links": [
-            58
+            63
           ]
         }
       ],
@@ -140,41 +149,41 @@
         "Node name for S&R": "Qwen3TTSVoiceClonePrompt"
       },
       "widgets_values": [
-        false,
-        "第三个登场的可就厉害了 现在都找不到人跟他结婚 没办法 相亲对象看到这个宣传视频掉头就跑 卡特使用的武器名为剁刀 和上期的杀猪刀有点像\n"
+        true,
+        ""
       ]
     },
     {
-      "id": 38,
+      "id": 39,
       "type": "Qwen3TTSVoiceClone",
       "pos": [
-        -132.77747039939692,
-        -370.6041931450887
+        -131.41565183325147,
+        -396.2521917239029
       ],
       "size": [
         400,
-        422
+        548
       ],
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
           "name": "model_obj",
           "type": "QWEN3_MODEL",
-          "link": 60
+          "link": 64
         },
         {
           "name": "ref_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 59
+          "link": null
         },
         {
           "name": "voice_clone_prompt",
           "shape": 7,
           "type": "QWEN3_PROMPT",
-          "link": 58
+          "link": 63
         }
       ],
       "outputs": [
@@ -182,7 +191,7 @@
           "name": "AUDIO",
           "type": "AUDIO",
           "links": [
-            61
+            62
           ]
         }
       ],
@@ -190,18 +199,65 @@
         "Node name for S&R": "Qwen3TTSVoiceClone"
       },
       "widgets_values": [
-        "我想用这个声音说这句话，效果不错。\n",
+        "我想用这个声音说这句话。[pause:1.5] 真的很有趣！",
         "Chinese",
-        "Batch (Separate)",
-        35285030240593,
+        "Concatenate (Merge)",
+        107308136313403,
         "randomize",
         "",
+        "",
         false,
-        1024,
-        0.7,
-        0.8,
+        2048,
+        0.9,
+        1,
         50,
-        1.05
+        1.05,
+        0.9,
+        1,
+        50
+      ]
+    },
+    {
+      "id": 40,
+      "type": "Qwen3TTSSenseVoiceASR",
+      "pos": [
+        -564.1789982078135,
+        -125.30470529809001
+      ],
+      "size": [
+        378.3322251677033,
+        126
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 66
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [
+            67
+          ]
+        },
+        {
+          "name": "suggested_instruct",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSSenseVoiceASR"
+      },
+      "widgets_values": [
+        "iic/SenseVoiceSmall",
+        "auto"
       ]
     }
   ],
@@ -223,36 +279,44 @@
       "QWEN3_MODEL"
     ],
     [
-      58,
-      35,
-      0,
-      38,
-      2,
-      "QWEN3_PROMPT"
-    ],
-    [
-      59,
-      6,
-      0,
-      38,
-      1,
-      "AUDIO"
-    ],
-    [
-      60,
-      33,
-      0,
-      38,
-      0,
-      "QWEN3_MODEL"
-    ],
-    [
-      61,
-      38,
+      62,
+      39,
       0,
       8,
       0,
       "AUDIO"
+    ],
+    [
+      63,
+      35,
+      0,
+      39,
+      2,
+      "QWEN3_PROMPT"
+    ],
+    [
+      64,
+      33,
+      0,
+      39,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      66,
+      6,
+      0,
+      40,
+      0,
+      "AUDIO"
+    ],
+    [
+      67,
+      40,
+      0,
+      35,
+      2,
+      "STRING"
     ]
   ],
   "groups": [],
@@ -261,11 +325,11 @@
     "ds": {
       "scale": 0.7972024500000017,
       "offset": [
-        1210.1880514915795,
-        760.0242799807804
+        1149.9774989525104,
+        635.8400153689498
       ]
     },
-    "frontendVersion": "1.37.11",
+    "frontendVersion": "1.38.11",
     "workflowRendererVersion": "LG"
   },
   "version": 0.4

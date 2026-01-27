@@ -1,8 +1,8 @@
 {
   "id": "fbafff79-86f2-42a4-b37c-da8a1d545913",
   "revision": 0,
-  "last_node_id": 11,
-  "last_link_id": 17,
+  "last_node_id": 12,
+  "last_link_id": 21,
   "nodes": [
     {
       "id": 1,
@@ -25,7 +25,7 @@
           "type": "QWEN3_MODEL",
           "links": [
             4,
-            11
+            20
           ]
         }
       ],
@@ -96,8 +96,8 @@
       "id": 4,
       "type": "SaveAudio",
       "pos": [
-        -787.574980459673,
-        -1352.8575985852378
+        -785.094432941924,
+        -1344.175682273116
       ],
       "size": [
         318.4834287560045,
@@ -110,7 +110,7 @@
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": 14
+          "link": 18
         }
       ],
       "outputs": [],
@@ -131,7 +131,7 @@
         136
       ],
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -141,7 +141,7 @@
           "links": [
             5,
             8,
-            12
+            21
           ]
         }
       ],
@@ -166,7 +166,7 @@
         722.3061872389994
       ],
       "flags": {},
-      "order": 1,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -218,8 +218,7 @@
       },
       "widgets_values": [
         "iic/SenseVoiceSmall",
-        "auto",
-        "float16"
+        "auto"
       ]
     },
     {
@@ -254,66 +253,6 @@
       ]
     },
     {
-      "id": 10,
-      "type": "Qwen3TTSVoiceClone",
-      "pos": [
-        -1234.1149056479662,
-        -1354.6064354342295
-      ],
-      "size": [
-        400,
-        422
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model_obj",
-          "type": "QWEN3_MODEL",
-          "link": 11
-        },
-        {
-          "name": "ref_audio",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": 12
-        },
-        {
-          "name": "voice_clone_prompt",
-          "shape": 7,
-          "type": "QWEN3_PROMPT",
-          "link": 17
-        }
-      ],
-      "outputs": [
-        {
-          "name": "AUDIO",
-          "type": "AUDIO",
-          "links": [
-            14
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Qwen3TTSVoiceClone"
-      },
-      "widgets_values": [
-        "我想用这个声音说这句话。",
-        "Chinese",
-        "Batch (Separate)",
-        108159905768297,
-        "randomize",
-        "",
-        false,
-        1024,
-        0.7,
-        0.8,
-        50,
-        1.05
-      ]
-    },
-    {
       "id": 11,
       "type": "Qwen3TTSPromptManager",
       "pos": [
@@ -340,7 +279,7 @@
           "name": "voice_clone_prompt",
           "type": "QWEN3_PROMPT",
           "links": [
-            17
+            19
           ]
         }
       ],
@@ -351,6 +290,70 @@
         "Save",
         "角色A.qwen3tts",
         "旁白"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "Qwen3TTSVoiceClone",
+      "pos": [
+        -1229.2777448047536,
+        -1355.9836890898391
+      ],
+      "size": [
+        400,
+        548
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "link": 20
+        },
+        {
+          "name": "ref_audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 21
+        },
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            18
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSVoiceClone"
+      },
+      "widgets_values": [
+        "我想用这个声音说这句话。[pause:0.5] 真的很有趣！",
+        "Chinese",
+        "Concatenate (Merge)",
+        322009896533784,
+        "randomize",
+        "",
+        "",
+        false,
+        2048,
+        0.9,
+        1,
+        50,
+        1.05,
+        0.9,
+        1,
+        50
       ]
     }
   ],
@@ -396,30 +399,6 @@
       "STRING"
     ],
     [
-      11,
-      1,
-      0,
-      10,
-      0,
-      "QWEN3_MODEL"
-    ],
-    [
-      12,
-      5,
-      0,
-      10,
-      1,
-      "AUDIO"
-    ],
-    [
-      14,
-      10,
-      0,
-      4,
-      0,
-      "AUDIO"
-    ],
-    [
       16,
       3,
       0,
@@ -428,12 +407,36 @@
       "QWEN3_PROMPT"
     ],
     [
-      17,
+      18,
+      12,
+      0,
+      4,
+      0,
+      "AUDIO"
+    ],
+    [
+      19,
       11,
       0,
-      10,
+      12,
       2,
       "QWEN3_PROMPT"
+    ],
+    [
+      20,
+      1,
+      0,
+      12,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      21,
+      5,
+      0,
+      12,
+      1,
+      "AUDIO"
     ]
   ],
   "groups": [],
@@ -442,12 +445,12 @@
     "ds": {
       "scale": 0.8062736092291725,
       "offset": [
-        1877.9409206961327,
-        1884.3403103703881
+        1999.4877490658369,
+        1848.3723713630275
       ]
     },
-    "workflowRendererVersion": "LG",
-    "frontendVersion": "1.37.11"
+    "frontendVersion": "1.38.11",
+    "workflowRendererVersion": "LG"
   },
   "version": 0.4
 }

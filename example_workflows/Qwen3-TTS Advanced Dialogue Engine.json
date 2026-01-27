@@ -1,8 +1,8 @@
 {
   "id": "c662d39f-8d05-448c-891c-fb82f0a6a996",
   "revision": 0,
-  "last_node_id": 30,
-  "last_link_id": 37,
+  "last_node_id": 39,
+  "last_link_id": 44,
   "nodes": [
     {
       "id": 1,
@@ -16,7 +16,7 @@
         187.4698793816484
       ],
       "flags": {},
-      "order": 3,
+      "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -48,10 +48,10 @@
       ],
       "size": [
         384.5552734375,
-        302
+        374
       ],
       "flags": {},
-      "order": 6,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -98,13 +98,16 @@
         "Node name for S&R": "Qwen3TTSAdvancedDialogue"
       },
       "widgets_values": [
-        800139374903558,
+        384647000706894,
         "randomize",
         1024,
         0.7,
         0.8,
         50,
-        1.05
+        1.05,
+        0.9,
+        1,
+        50
       ]
     },
     {
@@ -156,7 +159,7 @@
         "Node name for S&R": "Qwen3TTSScriptProcessor"
       },
       "widgets_values": [
-        "旁白: [低语] 在一个风雨交加的夜晚。\n[pause:1.5]\n角色A: [恐惧] 谁？谁在那里？\n角色B: [冷酷] 是我...",
+        "旁白: [低语] 在一个风雨[p:1.5]交加的夜晚。\n[pause:1.5]\n角色A: [恐惧] 谁？谁在那里？\n角色B: [冷酷] 是我...",
         ""
       ]
     },
@@ -172,7 +175,7 @@
         106
       ],
       "flags": {},
-      "order": 7,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -203,15 +206,15 @@
       "id": 10,
       "type": "Qwen3TTSRoleBank",
       "pos": [
-        -349.34747900196345,
-        -1442.2134918349623
+        -354.98508699684766,
+        -1441.0859702359853
       ],
       "size": [
         272.1177734375,
         166
       ],
       "flags": {},
-      "order": 5,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -269,7 +272,7 @@
         112
       ],
       "flags": {},
-      "order": 8,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -296,7 +299,7 @@
         106
       ],
       "flags": {},
-      "order": 0,
+      "order": 1,
       "mode": 0,
       "inputs": [
         {
@@ -376,7 +379,7 @@
         106
       ],
       "flags": {},
-      "order": 1,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -401,6 +404,360 @@
       "widgets_values": [
         "Load",
         "旁白.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 32,
+      "type": "Qwen3TTSRoleBank",
+      "pos": [
+        -328.56217661628784,
+        -850.9022603670026
+      ],
+      "size": [
+        272.1177734375,
+        166
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "prev_role_bank",
+          "shape": 7,
+          "type": "QWEN3_ROLE_BANK",
+          "link": null
+        },
+        {
+          "name": "prompt_1",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 38
+        },
+        {
+          "name": "prompt_2",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 39
+        },
+        {
+          "name": "prompt_3",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 40
+        }
+      ],
+      "outputs": [
+        {
+          "name": "role_bank",
+          "type": "QWEN3_ROLE_BANK",
+          "links": [
+            41
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSRoleBank"
+      },
+      "widgets_values": [
+        "旁白",
+        "角色A",
+        "角色B"
+      ]
+    },
+    {
+      "id": 33,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        -713.3904613263339,
+        -644.3215264632387
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            40
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "角色B.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 34,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        -701.3132535249702,
+        -816.756502544496
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "角色A.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 35,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        -711.885778283162,
+        -975.6612194380325
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            38
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "旁白.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 36,
+      "type": "Qwen3TTSRoleBank",
+      "pos": [
+        478.10568025624906,
+        -894.3856891230068
+      ],
+      "size": [
+        272.1177734375,
+        166
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "prev_role_bank",
+          "shape": 7,
+          "type": "QWEN3_ROLE_BANK",
+          "link": 41
+        },
+        {
+          "name": "prompt_1",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 42
+        },
+        {
+          "name": "prompt_2",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 43
+        },
+        {
+          "name": "prompt_3",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 44
+        }
+      ],
+      "outputs": [
+        {
+          "name": "role_bank",
+          "type": "QWEN3_ROLE_BANK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSRoleBank"
+      },
+      "widgets_values": [
+        "角色C",
+        "角色D",
+        "角色E"
+      ]
+    },
+    {
+      "id": 37,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        83.50686259960662,
+        -988.7015650216618
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            42
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "旁白.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 38,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        83.93169296700684,
+        -832.0518913260792
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            43
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "角色A.qwen3tts",
+        "my_voice_01"
+      ]
+    },
+    {
+      "id": 39,
+      "type": "Qwen3TTSPromptManager",
+      "pos": [
+        81.03904177416894,
+        -674.8364754642056
+      ],
+      "size": [
+        332.00390625,
+        106
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "voice_clone_prompt",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "voice_clone_prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            44
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSPromptManager"
+      },
+      "widgets_values": [
+        "Load",
+        "角色A.qwen3tts",
         "my_voice_01"
       ]
     }
@@ -493,20 +850,90 @@
       10,
       3,
       "QWEN3_PROMPT"
+    ],
+    [
+      38,
+      35,
+      0,
+      32,
+      1,
+      "QWEN3_PROMPT"
+    ],
+    [
+      39,
+      34,
+      0,
+      32,
+      2,
+      "QWEN3_PROMPT"
+    ],
+    [
+      40,
+      33,
+      0,
+      32,
+      3,
+      "QWEN3_PROMPT"
+    ],
+    [
+      41,
+      32,
+      0,
+      36,
+      0,
+      "QWEN3_ROLE_BANK"
+    ],
+    [
+      42,
+      37,
+      0,
+      36,
+      1,
+      "QWEN3_PROMPT"
+    ],
+    [
+      43,
+      38,
+      0,
+      36,
+      2,
+      "QWEN3_PROMPT"
+    ],
+    [
+      44,
+      39,
+      0,
+      36,
+      3,
+      "QWEN3_PROMPT"
     ]
   ],
-  "groups": [],
+  "groups": [
+    {
+      "id": 1,
+      "title": "支持串联，无限角色",
+      "bounding": [
+        -723.3904613263339,
+        -1053.7713058339402,
+        1594.7486397146984,
+        463.4360914269747
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
   "config": {},
   "extra": {
     "ds": {
       "scale": 0.88690097015209,
       "offset": [
-        938.4826774466134,
-        2064.699389658873
+        929.4625046548001,
+        1946.3096217663017
       ]
     },
-    "workflowRendererVersion": "LG",
-    "frontendVersion": "1.37.11"
+    "frontendVersion": "1.38.11",
+    "workflowRendererVersion": "LG"
   },
   "version": 0.4
 }

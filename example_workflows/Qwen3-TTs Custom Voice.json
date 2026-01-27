@@ -1,7 +1,7 @@
 {
   "id": "6bbd3374-8f9b-4fab-b971-196326e9241c",
   "revision": 0,
-  "last_node_id": 41,
+  "last_node_id": 42,
   "last_link_id": 56,
   "nodes": [
     {
@@ -35,7 +35,7 @@
         "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
         "ModelScope",
         "bf16",
-        "sdpa",
+        "flash_attention_2",
         true
       ]
     },
@@ -51,7 +51,7 @@
         112
       ],
       "flags": {},
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -74,11 +74,11 @@
         -1506.8443837459558
       ],
       "size": [
-        400,
-        382
+        399.1528763343524,
+        526.0055115800391
       ],
       "flags": {},
-      "order": 1,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
@@ -100,19 +100,45 @@
         "Node name for S&R": "Qwen3TTSCustomVoice"
       },
       "widgets_values": [
-        "其实我真的有发现，我是一个特别善于观察别人情绪的人。\n",
+        "其实我真的有发现，我是一个特别[p:1.5]善于观察别人情绪的人。\n",
         "Vivian (Chinese - Bright, Sharp, Young Female)",
         "Auto",
-        "Batch (Separate)",
-        0,
+        "Concatenate (Merge)",
+        1105334509258910,
         "randomize",
-        "",
+        "开心",
         1024,
         0.7,
         0.8,
         50,
-        1.05
+        1.05,
+        0.9,
+        1,
+        50
       ]
+    },
+    {
+      "id": 42,
+      "type": "MarkdownNote",
+      "pos": [
+        -16.70772185487272,
+        -1318.0205186731243
+      ],
+      "size": [
+        278.08115750054526,
+        182.83293151888984
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "使用[pause:1.5]或[p:1.5]时，输出模式使用合并输出。\n\nWhen using [pause:1.5], use the merged output mode.\n\n"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
     }
   ],
   "links": [
@@ -137,13 +163,13 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.0731501738840283,
+      "scale": 1.1804651912724313,
       "offset": [
-        857.4779600100343,
-        1820.8731266014909
+        955.3207433923225,
+        1707.6974048709817
       ]
     },
-    "frontendVersion": "1.37.11",
+    "frontendVersion": "1.38.11",
     "workflowRendererVersion": "LG"
   },
   "version": 0.4

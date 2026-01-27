@@ -1,7 +1,7 @@
 {
   "id": "3ca025f4-2a5a-439a-8d97-01bc53eae660",
   "revision": 0,
-  "last_node_id": 38,
+  "last_node_id": 39,
   "last_link_id": 56,
   "nodes": [
     {
@@ -74,8 +74,8 @@
         -907.2854539880965
       ],
       "size": [
-        419.83865729391925,
-        461.86120583287106
+        428.0075161796507,
+        554.0526132575545
       ],
       "flags": {},
       "order": 1,
@@ -100,17 +100,20 @@
         "Node name for S&R": "Qwen3TTSVoiceDesign"
       },
       "widgets_values": [
-        "哥哥，你回来啦，人家等了你好久好久了，要抱抱！\nIt's in the top drawer... wait, it's empty?",
+        "哥哥，你回来啦，人家等了[p:1.5]你好久好久了，要抱抱！\nIt's in the top drawer... wait, it's empty?",
         "体现撒娇稚嫩的萝莉女声，音调偏高且起伏明显，营造出黏人、做作又刻意卖萌的听觉效果。\nSpeak in an incredulous tone, but with a hint of panic.",
         "Chinese",
         "Concatenate (Merge)",
-        609553264972749,
+        121113479267999,
         "randomize",
         1024,
         0.7,
         0.8,
         50,
-        1.05
+        1.05,
+        0.9,
+        1,
+        50
       ]
     }
   ],
@@ -138,11 +141,11 @@
     "ds": {
       "scale": 0.8569128317575555,
       "offset": [
-        1150.4758161031948,
-        1280.7190030501044
+        1192.487090372671,
+        1249.2105473479978
       ]
     },
-    "frontendVersion": "1.37.11",
+    "frontendVersion": "1.38.11",
     "workflowRendererVersion": "LG"
   },
   "version": 0.4

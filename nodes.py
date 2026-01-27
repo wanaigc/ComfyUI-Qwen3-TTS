@@ -56,7 +56,6 @@ try:
 except ImportError:
     pass
 
-HAS_FFMPEG_PYTHON = False
 try:
     import ffmpeg
     HAS_FFMPEG_PYTHON = True
@@ -66,6 +65,7 @@ except ImportError:
 logger = logging.getLogger("ComfyUI-Qwen3-TTS")
 
 EMOTION_MAP = {
+    # 中文情绪
     "开心": "用愉快、开心的语气说话，充满活力和阳光。",
     "激动": "语气非常激动，语速稍快，充满兴奋感。",
     "生气": "用愤怒、严厉的语气说话，语调生硬且带有攻击性。",
@@ -74,10 +74,18 @@ EMOTION_MAP = {
     "恐惧": "声音颤抖，语气惊恐不安，呼吸感加重。",
     "冷酷": "语气冰冷、没有任何情感波动，显得疏离而机械。",
     "低语": "用极小的声音说话，像是在耳边轻声细语，充满神秘感。",
+    "惊讶": "语气充满震惊和不可思议，音调上扬，带有明显的意外感。",
+    "厌恶": "语气充满嫌弃和反感，带有不屑和排斥的情感。",
+    "平静": "语气平稳自然，没有明显的情绪波动，清晰且沉稳。",
+    # English Emotions (Mapping to detailed instructs)
     "happy": "Speak in a very happy and cheerful tone, full of energy.",
     "angry": "Speak with an angry and stern tone, aggressive and sharp.",
     "sad": "Speak in a sad, low-spirited voice with a hint of sorrow.",
     "whisper": "Speak in a very soft whisper, as if sharing a secret.",
+    "fearful": "Speak with a trembling, terrified voice, sounding panic-stricken.",
+    "surprised": "Speak with a shocked and incredulous tone, pitch raised.",
+    "disgusted": "Speak with a tone of revulsion and strong dislike.",
+    "neutral": "Speak in a natural, calm, and steady tone.",
 }
 
 if "TTS" not in folder_paths.folder_names_and_paths:
@@ -146,23 +154,33 @@ def apply_qwen3_patches(model, attn_mode="sdpa"):
     if attn_mode == "sage_attention":
         try:
             from sageattention import sageattn
+
             def make_sage_forward(orig_forward):
                 def sage_forward(*args, **kwargs):
                     if len(args) >= 3:
                         q, k, v = args[0], args[1], args[2]
-                        return sageattn(q, k, v, is_causal=False, attn_mask=kwargs.get('attention_mask'))
+                        return sageattn(
+                            q,
+                            k,
+                            v,
+                            is_causal=False,
+                            attn_mask=kwargs.get("attention_mask"),
+                        )
                     return orig_forward(*args, **kwargs)
+
                 return sage_forward
 
             patched_count = 0
             for name, m in model.model.named_modules():
-                if 'Attention' in type(m).__name__ or 'attn' in name.lower():
-                    if hasattr(m, 'forward'):
+                if "Attention" in type(m).__name__ or "attn" in name.lower():
+                    if hasattr(m, "forward"):
                         m.forward = make_sage_forward(m.forward)
                         patched_count += 1
             logger.info(f"Qwen3-TTS: SageAttention patched on {patched_count} modules.")
         except ImportError:
-            logger.warning("Qwen3-TTS: 'sageattention' not installed. Running in SDPA mode.")
+            logger.warning(
+                "Qwen3-TTS: 'sageattention' not installed. Running in SDPA mode."
+            )
         except Exception as e:
             logger.warning(f"Qwen3-TTS: SageAttention patch failed: {e}")
 
@@ -256,10 +274,16 @@ class Qwen3TTSLoader:
             from comfy.model_management import get_torch_device
             device = get_torch_device()
         except ImportError:
-            device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+            device = torch.device(
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps" if torch.backends.mps.is_available() else "cpu"
+            )
 
         if device.type == "mps" and precision == "fp32":
-            logger.warning("MPS device detected: 'fp32' is extremely slow. Forcing 'fp16'.")
+            logger.warning(
+                "MPS device detected: 'fp32' is extremely slow. Forcing 'fp16'."
+            )
             torch_dtype = torch.float16
         else:
             torch_dtype = dtype_map.get(precision, torch.bfloat16)
@@ -276,7 +300,7 @@ class Qwen3TTSLoader:
 
         try:
             if "Qwen3TTSModel" not in globals():
-                 raise ImportError("Qwen3TTSModel not imported. Is qwen-tts installed?")
+                raise ImportError("Qwen3TTSModel not imported. Is qwen-tts installed?")
 
             model = Qwen3TTSModel.from_pretrained(
                 local_model_path,
@@ -332,7 +356,35 @@ class Qwen3TTSBaseNode:
 
         return ({"waveform": batch_waveform, "sample_rate": sr},)
 
-    def _audio_tensor_to_numpy_tuple(self, audio_data: Dict[str, Any]) -> Tuple[np.ndarray, int]:
+    def _parse_text_with_pauses(self, text_input):
+        input_lines = [t.strip() for t in text_input.split("\n") if t.strip()]
+        segments = []
+        pause_pattern = re.compile(r"\[(?:pause|p):(\d+(?:\.\d+)?)\]", re.IGNORECASE)
+
+        for line in input_lines:
+            last_idx = 0
+            for match in pause_pattern.finditer(line):
+                text_part = line[last_idx : match.start()].strip()
+                if text_part:
+                    segments.append(("text", text_part))
+
+                try:
+                    duration = float(match.group(1))
+                    segments.append(("pause", duration))
+                except ValueError:
+                    pass
+
+                last_idx = match.end()
+
+            remaining_text = line[last_idx:].strip()
+            if remaining_text:
+                segments.append(("text", remaining_text))
+
+        return segments
+
+    def _audio_tensor_to_numpy_tuple(
+        self, audio_data: Dict[str, Any]
+    ) -> Tuple[np.ndarray, int]:
         waveform = audio_data["waveform"]
         sr = audio_data["sample_rate"]
 
@@ -421,7 +473,7 @@ class Qwen3TTSBaseNode:
                     "display": "number",
                 },
             ),
-             "subtalker_top_k": (
+            "subtalker_top_k": (
                 "INT",
                 {"default": 50, "min": 0, "max": 200, "display": "number"},
             ),
@@ -429,8 +481,14 @@ class Qwen3TTSBaseNode:
 
     def _pack_gen_kwargs(self, kwargs):
         keys = [
-            "max_new_tokens", "temperature", "top_p", "top_k", "repetition_penalty",
-            "subtalker_temperature", "subtalker_top_p", "subtalker_top_k"
+            "max_new_tokens",
+            "temperature",
+            "top_p",
+            "top_k",
+            "repetition_penalty",
+            "subtalker_temperature",
+            "subtalker_top_p",
+            "subtalker_top_k",
         ]
         res = {k: kwargs.get(k) for k in keys if k in kwargs}
 
@@ -462,7 +520,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
                     "STRING",
                     {
                         "multiline": True,
-                        "default": "第一行文本。\n第二行文本(将作为第二段音频生成)。",
+                        "default": "你好，我是Vivian。[pause:0.8] 很高兴为你服务！",
                     },
                 ),
                 "speaker": (speaker_options, {"default": speaker_options[0]}),
@@ -484,7 +542,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
                 ),
                 "output_mode": (
                     ["Batch (Separate)", "Concatenate (Merge)"],
-                    {"default": "Batch (Separate)"},
+                    {"default": "Concatenate (Merge)"},
                 ),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
             },
@@ -494,7 +552,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
                     {
                         "multiline": True,
                         "default": "",
-                        "placeholder": "可选：例如 '用特别愤怒的语气说'",
+                        "placeholder": "可选：例如 '开心'",
                     },
                 ),
             },
@@ -515,7 +573,7 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
         output_mode,
         seed,
         instruct="",
-        **kwargs
+        **kwargs,
     ):
         self._check_model_compatibility(model_obj, ["CustomVoice"])
         clear_memory()
@@ -523,32 +581,60 @@ class Qwen3TTSCustomVoice(Qwen3TTSBaseNode):
 
         real_speaker_id = self.SPEAKER_MAPPING.get(speaker, "Vivian")
         dev = safe_get_device(model_obj)
-
-        text_list = [t.strip() for t in text.split("\n") if t.strip()]
-        if not text_list:
-            raise ValueError("Input text cannot be empty.")
-
-        batch_size = len(text_list)
-        logger.info(f"Generate: Custom Voice Batch Size: {batch_size} | Device: {dev}")
-
-        lang_input = "auto" if language == "Auto" else language
-        language_list = [lang_input] * batch_size
-        speaker_list = [real_speaker_id] * batch_size
-        instruct_val = instruct if instruct.strip() else ""
-        instruct_list = [instruct_val] * batch_size
-
         gen_kwargs = self._pack_gen_kwargs(kwargs)
 
-        wavs, sr = model_obj.generate_custom_voice(
-            text=text_list,
-            language=language_list,
-            speaker=speaker_list,
-            instruct=instruct_list,
-            **gen_kwargs,
-        )
+        final_instruct = instruct.strip()
+        if final_instruct in EMOTION_MAP:
+            final_instruct = EMOTION_MAP[final_instruct]
+        if not final_instruct:
+            final_instruct = None
+
+        segments = self._parse_text_with_pauses(text)
+        if not segments:
+            raise ValueError("Input text cannot be empty.")
+
+        logger.info(f"CustomVoice: Generating {len(segments)} segments on {dev}")
+
+        audio_results = []
+        sr = 24000
+        lang_input = "auto" if language == "Auto" else language
+
+        pbar = ProgressBar(len(segments))
+
+        for i, (seg_type, content) in enumerate(segments):
+            pbar.update(i)
+            if seg_type == "pause":
+                if content > 0:
+                    silence_samples = int(content * sr)
+                    audio_results.append(np.zeros(silence_samples, dtype=np.float32))
+            else:
+                try:
+                    wavs, current_sr = model_obj.generate_custom_voice(
+                        text=[content],
+                        language=[lang_input],
+                        speaker=[real_speaker_id],
+                        instruct=[final_instruct] if final_instruct else None,
+                        **gen_kwargs,
+                    )
+                    sr = current_sr
+                    if wavs[0].ndim > 1:
+                        audio_results.append(wavs[0].squeeze())
+                    else:
+                        audio_results.append(wavs[0])
+                except Exception as e:
+                    logger.error(f"Error segment '{content}': {e}")
+
+        pbar.update(len(segments))
+
+        if not audio_results:
+            raise RuntimeError("No audio generated.")
 
         do_concat = output_mode == "Concatenate (Merge)"
-        return self._convert_audio_to_comfy(wavs, sr, concat=do_concat)
+        if do_concat:
+            full_audio = np.concatenate(audio_results)
+            return self._convert_audio_to_comfy([full_audio], sr, concat=True)
+        else:
+            return self._convert_audio_to_comfy(audio_results, sr, concat=False)
 
 
 class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
@@ -561,7 +647,7 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
                     "STRING",
                     {
                         "multiline": True,
-                        "default": "哥哥，你回来啦，人家等了你好久好久了，要抱抱！\nIt's in the top drawer... wait, it's empty?",
+                        "default": "哥哥，你回来啦。[pause:0.5] 人家等了你好久好久了！，要抱抱！\nIt's in the top drawer... wait, it's empty?",
                     },
                 ),
                 "voice_instruction": (
@@ -569,7 +655,7 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
                     {
                         "multiline": True,
                         "default": "体现撒娇稚嫩的萝莉女声，音调偏高且起伏明显，营造出黏人、做作又刻意卖萌的听觉效果。\nSpeak in an incredulous tone, but with a hint of panic.",
-                        "placeholder": "描述声音特征。行数需与文本一致或仅有一行。",
+                        "placeholder": "描述声音特征 (语气/音色)。",
                     },
                 ),
                 "language": (
@@ -589,7 +675,7 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
                 ),
                 "output_mode": (
                     ["Batch (Separate)", "Concatenate (Merge)"],
-                    {"default": "Batch (Separate)"},
+                    {"default": "Concatenate (Merge)"},
                 ),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
             },
@@ -603,55 +689,61 @@ class Qwen3TTSVoiceDesign(Qwen3TTSBaseNode):
     CATEGORY = "Qwen3-TTS"
 
     def generate(
-        self,
-        model_obj,
-        text,
-        voice_instruction,
-        language,
-        output_mode,
-        seed,
-        **kwargs
+        self, model_obj, text, voice_instruction, language, output_mode, seed, **kwargs
     ):
         self._check_model_compatibility(model_obj, ["VoiceDesign"])
         clear_memory()
         set_random_seed(seed)
 
         dev = safe_get_device(model_obj)
-
-        text_list = [t.strip() for t in text.split("\n") if t.strip()]
-        if not text_list:
-            raise ValueError("Input text cannot be empty.")
-
-        instruct_list = [i.strip() for i in voice_instruction.split("\n") if i.strip()]
-        if not instruct_list:
-            raise ValueError("Voice instruction cannot be empty. VoiceDesign requires a prompt.")
-
-        batch_size = len(text_list)
-        logger.info(f"Generate: Voice Design Batch Size: {batch_size} | Device: {dev}")
-
-        final_instructs = []
-        if len(instruct_list) == 1:
-            final_instructs = instruct_list * batch_size
-        elif len(instruct_list) == batch_size:
-            final_instructs = instruct_list
-        else:
-            raise ValueError(
-                f"Instruct count {len(instruct_list)} != Text count {batch_size}. Please provide either 1 instruction (broadcast) or N instructions (one per line)."
-            )
-
-        language_list = [language] * batch_size
-
         gen_kwargs = self._pack_gen_kwargs(kwargs)
 
-        wavs, sr = model_obj.generate_voice_design(
-            text=text_list,
-            language=language_list,
-            instruct=final_instructs,
-            **gen_kwargs,
-        )
+        instruct_str = voice_instruction.strip()
+        if not instruct_str:
+            raise ValueError("Voice instruction cannot be empty.")
+
+        segments = self._parse_text_with_pauses(text)
+        if not segments:
+            raise ValueError("Input text cannot be empty.")
+
+        logger.info(f"VoiceDesign: Generating {len(segments)} segments on {dev}")
+
+        audio_results = []
+        sr = 24000
+        pbar = ProgressBar(len(segments))
+
+        for i, (seg_type, content) in enumerate(segments):
+            pbar.update(i)
+            if seg_type == "pause":
+                if content > 0:
+                    silence_samples = int(content * sr)
+                    audio_results.append(np.zeros(silence_samples, dtype=np.float32))
+            else:
+                try:
+                    wavs, current_sr = model_obj.generate_voice_design(
+                        text=[content],
+                        language=[language],
+                        instruct=[instruct_str],
+                        **gen_kwargs,
+                    )
+                    sr = current_sr
+                    if wavs[0].ndim > 1:
+                        audio_results.append(wavs[0].squeeze())
+                    else:
+                        audio_results.append(wavs[0])
+                except Exception as e:
+                    logger.error(f"Error segment '{content}': {e}")
+
+        pbar.update(len(segments))
+        if not audio_results:
+            raise RuntimeError("No audio generated.")
 
         do_concat = output_mode == "Concatenate (Merge)"
-        return self._convert_audio_to_comfy(wavs, sr, concat=do_concat)
+        if do_concat:
+            full_audio = np.concatenate(audio_results)
+            return self._convert_audio_to_comfy([full_audio], sr, concat=True)
+        else:
+            return self._convert_audio_to_comfy(audio_results, sr, concat=False)
 
 
 class Qwen3TTSVoiceClonePrompt(Qwen3TTSBaseNode):
@@ -721,7 +813,10 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
                 "model_obj": ("QWEN3_MODEL",),
                 "target_text": (
                     "STRING",
-                    {"multiline": True, "default": "我想用这个声音说这句话。"},
+                    {
+                        "multiline": True,
+                        "default": "我想用这个声音说这句话。[pause:0.5] 真的很有趣！",
+                    },
                 ),
                 "target_language": (
                     [
@@ -740,7 +835,7 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
                 ),
                 "output_mode": (
                     ["Batch (Separate)", "Concatenate (Merge)"],
-                    {"default": "Batch (Separate)"},
+                    {"default": "Concatenate (Merge)"},
                 ),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
             },
@@ -751,16 +846,21 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
                     {
                         "multiline": True,
                         "default": "",
-                        "placeholder": "Required if using ref_audio (unless X-Vector Only)",
+                        "placeholder": "Ref text required unless X-Vector Only is True",
                     },
                 ),
                 "voice_clone_prompt": ("QWEN3_PROMPT",),
+                "instruct": (
+                    "STRING",
+                    {
+                        "multiline": True,
+                        "default": "",
+                        "placeholder": "可选：输入 '开心', 'sad' 或完整描述。",
+                    },
+                ),
                 "enable_x_vector_instant": (
                     "BOOLEAN",
-                    {
-                        "default": False,
-                        "label": "Instant X-Vector Mode (Ignore Ref Text)",
-                    },
+                    {"default": False, "label": "Instant X-Vector Mode"},
                 ),
             },
         }
@@ -781,8 +881,9 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
         ref_audio=None,
         ref_text="",
         voice_clone_prompt=None,
+        instruct="",
         enable_x_vector_instant=False,
-        **kwargs
+        **kwargs,
     ):
         self._check_model_compatibility(model_obj, ["Base"])
         clear_memory()
@@ -791,32 +892,19 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
         dev = safe_get_device(model_obj)
         gen_kwargs = self._pack_gen_kwargs(kwargs)
 
-        text_list = [t.strip() for t in target_text.split("\n") if t.strip()]
-        if not text_list:
-            if target_text.strip():
-                text_list = [target_text.strip()]
-            else:
-                raise ValueError("Target text cannot be empty.")
-
-        batch_size = len(text_list)
-        logger.info(
-            f"Generate: Clone Batch Size: {batch_size} on {dev}"
-        )
-
-        if "cpu" in str(dev).lower() and gen_kwargs.get("max_new_tokens", 1024) > 512:
-            logger.warning("CPU Mode Detected: Reducing max_new_tokens to 512 to prevent freeze.")
-            gen_kwargs["max_new_tokens"] = 512
+        final_instruct = instruct.strip()
+        if final_instruct in EMOTION_MAP:
+            final_instruct = EMOTION_MAP[final_instruct]
+        if not final_instruct:
+            final_instruct = None
 
         prompt_item = None
-        pbar = ProgressBar(100)
-        pbar.update(5)
-
         if voice_clone_prompt is not None:
             logger.info("Clone: Using cached Prompt.")
             prompt_item = voice_clone_prompt
         elif ref_audio is not None:
             if not enable_x_vector_instant and not ref_text.strip():
-                raise ValueError("Reference Text (ref_text) is required unless X-Vector Only is enabled.")
+                raise ValueError("Ref text required for non-instant mode.")
             ref_wav, ref_sr = self._audio_tensor_to_numpy_tuple(ref_audio)
             prompt_item = model_obj.create_voice_clone_prompt(
                 ref_audio=(ref_wav, ref_sr),
@@ -826,25 +914,50 @@ class Qwen3TTSVoiceClone(Qwen3TTSBaseNode):
         else:
             raise ValueError("Input missing: need ref_audio OR voice_clone_prompt.")
 
-        pbar.update(20)
+        segments = self._parse_text_with_pauses(target_text)
+        if not segments:
+            raise ValueError("Target text cannot be empty.")
 
-        language_list = [target_language] * batch_size
+        logger.info(f"VoiceClone: Generating {len(segments)} segments on {dev}")
 
-        try:
-            wavs, sr = model_obj.generate_voice_clone(
-                text=text_list,
-                language=language_list,
-                voice_clone_prompt=prompt_item,
-                **gen_kwargs,
-            )
+        audio_results = []
+        sr = 24000
+        pbar = ProgressBar(len(segments))
 
-            pbar.update(100)
-            do_concat = output_mode == "Concatenate (Merge)"
-            return self._convert_audio_to_comfy(wavs, sr, concat=do_concat)
+        for i, (seg_type, content) in enumerate(segments):
+            pbar.update(i)
+            if seg_type == "pause":
+                if content > 0:
+                    silence_samples = int(content * sr)
+                    audio_results.append(np.zeros(silence_samples, dtype=np.float32))
+            else:
+                try:
+                    wavs, current_sr = model_obj.generate_voice_clone(
+                        text=[content],
+                        language=[target_language],
+                        voice_clone_prompt=prompt_item,
+                        instruct=[final_instruct] if final_instruct else None,
+                        **gen_kwargs,
+                    )
+                    sr = current_sr
+                    if wavs[0].ndim > 1:
+                        audio_results.append(wavs[0].squeeze())
+                    else:
+                        audio_results.append(wavs[0])
+                except Exception as e:
+                    logger.error(f"Error segment '{content}': {e}")
 
-        except Exception as e:
-            logger.error(f"Generation failed: {e}")
-            raise RuntimeError(f"Error: {e}")
+        pbar.update(len(segments))
+        if not audio_results:
+            raise RuntimeError("No audio generated.")
+
+        do_concat = output_mode == "Concatenate (Merge)"
+        if do_concat:
+            full_audio = np.concatenate(audio_results)
+            return self._convert_audio_to_comfy([full_audio], sr, concat=True)
+        else:
+            return self._convert_audio_to_comfy(audio_results, sr, concat=False)
+
 
 class Qwen3TTSAudioSpeed:
     @classmethod
@@ -876,7 +989,7 @@ class Qwen3TTSAudioSpeed:
                 ),
                 "n_fft": (
                     [2048, 4096, 8192],
-                    {"default": 4096, "label": "Quality (Librosa only)"}
+                    {"default": 4096, "label": "Quality (Librosa only)"},
                 ),
             }
         }
@@ -903,7 +1016,9 @@ class Qwen3TTSAudioSpeed:
             return ({"waveform": waveform, "sample_rate": original_sr},)
 
         processed_input_audio = {"waveform": waveform, "sample_rate": original_sr}
-        wav_numpy, sr = Qwen3TTSBaseNode()._audio_tensor_to_numpy_tuple(processed_input_audio)
+        wav_numpy, sr = Qwen3TTSBaseNode()._audio_tensor_to_numpy_tuple(
+            processed_input_audio
+        )
 
         if "FFmpeg" in method:
             if not HAS_FFMPEG_PYTHON:
@@ -913,8 +1028,11 @@ class Qwen3TTSAudioSpeed:
                 temp_in = ""
                 temp_out = ""
                 try:
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_in, \
-                         tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_out:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".wav", delete=False
+                    ) as f_in, tempfile.NamedTemporaryFile(
+                        suffix=".wav", delete=False
+                    ) as f_out:
                         temp_in = f_in.name
                         temp_out = f_out.name
 
@@ -924,13 +1042,13 @@ class Qwen3TTSAudioSpeed:
                     curr_speed = speed
 
                     while curr_speed > 2.0:
-                        stream = stream.filter('atempo', 2.0)
+                        stream = stream.filter("atempo", 2.0)
                         curr_speed /= 2.0
                     while curr_speed < 0.5:
-                        stream = stream.filter('atempo', 0.5)
+                        stream = stream.filter("atempo", 0.5)
                         curr_speed /= 0.5
                     if abs(curr_speed - 1.0) > 0.01:
-                        stream = stream.filter('atempo', curr_speed)
+                        stream = stream.filter("atempo", curr_speed)
 
                     stream.output(temp_out).run(overwrite_output=True, quiet=True)
 
@@ -946,25 +1064,35 @@ class Qwen3TTSAudioSpeed:
 
                 except Exception as e:
                     error_str = str(e)
-                    if hasattr(e, 'stderr') and e.stderr:
+                    if hasattr(e, "stderr") and e.stderr:
                         error_str += f" | Details: {e.stderr.decode()}"
                     print(f"❌ FFmpeg error: {error_str}. Falling back to Librosa.")
                 finally:
                     for p in [temp_in, temp_out]:
                         if p and os.path.exists(p):
-                            try: os.remove(p)
-                            except: pass
+                            try:
+                                os.remove(p)
+                            except:
+                                pass
 
         if "Resampling" in method:
             samples = wav_numpy.shape[-1]
             new_samples = int(samples / speed)
             wav_tensor = torch.from_numpy(wav_numpy).unsqueeze(0).unsqueeze(0)
-            new_wav = F.interpolate(wav_tensor, size=new_samples, mode='linear', align_corners=False)
+            new_wav = F.interpolate(
+                wav_tensor, size=new_samples, mode="linear", align_corners=False
+            )
             return ({"waveform": new_wav.squeeze(0), "sample_rate": sr},)
 
         if not HAS_LIBROSA:
             print("⚠️ Librosa not found. Fallback to Resampling.")
-            return self.adjust_speed(processed_input_audio, speed, "Resampling (Pitch Shift)", n_fft, "Keep Original")
+            return self.adjust_speed(
+                processed_input_audio,
+                speed,
+                "Resampling (Pitch Shift)",
+                n_fft,
+                "Keep Original",
+            )
 
         y_stretched = librosa.effects.time_stretch(wav_numpy, rate=speed, n_fft=n_fft)
 
@@ -974,6 +1102,7 @@ class Qwen3TTSAudioSpeed:
         out_tensor = out_tensor.unsqueeze(0)
 
         return ({"waveform": out_tensor, "sample_rate": sr},)
+
 
 class Qwen3TTSPromptManager:
     @classmethod
@@ -1209,7 +1338,9 @@ class Qwen3TTSAdvancedDialogue(Qwen3TTSBaseNode):
                 if role_bank:
                     prompt = list(role_bank.values())[0]
                 else:
-                    raise ValueError(f"RoleBank is empty, cannot generate voice for {roles[i]}")
+                    raise ValueError(
+                        f"RoleBank is empty, cannot generate voice for {roles[i]}"
+                    )
             else:
                 prompt = role_bank[roles[i]]
 
@@ -1233,6 +1364,7 @@ class Qwen3TTSAdvancedDialogue(Qwen3TTSBaseNode):
         full_audio = np.concatenate(all_segments)
 
         return self._convert_audio_to_comfy([full_audio], sr)
+
 
 class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
     @classmethod
@@ -1267,6 +1399,7 @@ class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
 
         try:
             from comfy.model_management import get_torch_device
+
             device_obj = get_torch_device()
         except ImportError:
             device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1279,7 +1412,7 @@ class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
             model=model_dir,
             trust_remote_code=True,
             device=device_str,
-            disable_update=True
+            disable_update=True,
         )
 
         wav_np, sr = self._audio_tensor_to_numpy_tuple(audio)
