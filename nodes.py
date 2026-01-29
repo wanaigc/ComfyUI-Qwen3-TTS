@@ -58,6 +58,7 @@ except ImportError:
 
 try:
     import ffmpeg
+
     HAS_FFMPEG_PYTHON = True
 except ImportError:
     pass
@@ -89,7 +90,9 @@ EMOTION_MAP = {
 }
 
 if "TTS" not in folder_paths.folder_names_and_paths:
-    folder_paths.add_model_folder_path("TTS", os.path.join(folder_paths.models_dir, "TTS"))
+    folder_paths.add_model_folder_path(
+        "TTS", os.path.join(folder_paths.models_dir, "TTS")
+    )
 
 
 def safe_get_device(model):
@@ -100,6 +103,7 @@ def safe_get_device(model):
     except Exception:
         return torch.device("cpu")
 
+
 def clear_memory():
     gc.collect()
     if torch.cuda.is_available():
@@ -109,6 +113,7 @@ def clear_memory():
             torch.mps.empty_cache()
         except:
             pass
+
 
 def apply_qwen3_patches(model, attn_mode="sdpa"):
     if model is None:
@@ -272,6 +277,7 @@ class Qwen3TTSLoader:
 
         try:
             from comfy.model_management import get_torch_device
+
             device = get_torch_device()
         except ImportError:
             device = torch.device(
@@ -1118,13 +1124,19 @@ class Qwen3TTSPromptManager:
         return {
             "required": {
                 "mode": (["Save", "Load"],),
-                "load_file": (file_list,),
                 "save_filename": ("STRING", {"default": "my_voice_01"}),
             },
             "optional": {
+                "load_file": (file_list,),
                 "voice_clone_prompt": ("QWEN3_PROMPT",),
             },
         }
+
+    @classmethod
+    def VALIDATE_INPUTS(
+        cls, mode, save_filename, load_file="no_prompts_found", **kwargs
+    ):
+        return True
 
     RETURN_TYPES = ("QWEN3_PROMPT",)
     RETURN_NAMES = ("voice_clone_prompt",)
@@ -1155,7 +1167,7 @@ class Qwen3TTSPromptManager:
             return (voice_clone_prompt,)
 
         else:
-            if load_file == "no_prompts_found":
+            if load_file == "no_prompts_found" or not load_file:
                 raise ValueError("No history files found. Please save one first.")
 
             load_path = os.path.join(save_dir, load_file)
@@ -1344,11 +1356,18 @@ class Qwen3TTSAdvancedDialogue(Qwen3TTSBaseNode):
             else:
                 prompt = role_bank[roles[i]]
 
+            current_instruct = instructs[i]
+            instruct_arg = (
+                [current_instruct]
+                if current_instruct and current_instruct.strip()
+                else None
+            )
+
             wavs, _ = model_obj.generate_voice_clone(
                 text=[texts[i]],
                 language=["auto"],
                 voice_clone_prompt=prompt,
-                instruct=[instructs[i]],
+                instruct=instruct_arg,
                 **gen_kwargs,
             )
 
@@ -1367,6 +1386,9 @@ class Qwen3TTSAdvancedDialogue(Qwen3TTSBaseNode):
 
 
 class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
+    _model_cache = None
+    _last_model_id = None
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -1408,12 +1430,25 @@ class Qwen3TTSSenseVoiceASR(Qwen3TTSBaseNode):
 
         logger.info(f"ASR: Loading SenseVoice model on {device_str}...")
 
-        model = AutoModel(
-            model=model_dir,
-            trust_remote_code=True,
-            device=device_str,
-            disable_update=True,
-        )
+        if (
+            Qwen3TTSSenseVoiceASR._model_cache is None
+            or Qwen3TTSSenseVoiceASR._last_model_id != model_id
+        ):
+
+            if Qwen3TTSSenseVoiceASR._model_cache is not None:
+                del Qwen3TTSSenseVoiceASR._model_cache
+                clear_memory()
+
+            Qwen3TTSSenseVoiceASR._model_cache = AutoModel(
+                model=model_dir,
+                trust_remote_code=True,
+                device=device_str,
+                disable_update=True,
+            )
+            Qwen3TTSSenseVoiceASR._last_model_id = model_id
+            logger.info("ASR: Model loaded and cached.")
+
+        model = Qwen3TTSSenseVoiceASR._model_cache
 
         wav_np, sr = self._audio_tensor_to_numpy_tuple(audio)
         temp_path = ""
